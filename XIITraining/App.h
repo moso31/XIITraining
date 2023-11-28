@@ -21,4 +21,7 @@ private:
 	D3D* m_dx = nullptr;
 	HINSTANCE m_hInstance = NULL;
 	HWND m_hWnd = NULL;
+
+	int m_width = 800;
+	int m_height = 600;
 };

@@ -26,7 +26,7 @@ void App::InitWindow()
 	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 	bool x = RegisterClass(&wc);
 
-	RECT rc = { 0, 0, 800, 600 };
+	RECT rc = { 0, 0, m_width, m_height };
 	AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, false);
 	int width = rc.right - rc.left;
 	int height = rc.bottom - rc.top;
@@ -43,6 +43,6 @@ void App::InitWindow()
 
 void App::InitD3D()
 {
-	m_dx = new D3D();
+	m_dx = new D3D(m_width, m_height, m_hWnd);
 	m_dx->Init();
 }
