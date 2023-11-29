@@ -2,6 +2,7 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
+#include <d3dx12.h>
 
 using namespace Microsoft::WRL;
 
@@ -20,6 +21,7 @@ public:
 	void CreateSwapChain();
 	void CreateDescriptorHeap();
 
+	void Prepare();
 	void Render();
 
 	void Release() {}
@@ -28,6 +30,7 @@ private:
 	ComPtr<ID3D12Device10> m_pDevice;
 	ComPtr<IDXGIFactory7> m_pDXGIFactory;
 	ComPtr<IDXGISwapChain4> m_pSwapChain;
+	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 
 	ComPtr<ID3D12Fence1> m_pFence;
 
@@ -50,5 +53,10 @@ private:
 
 	// 当前帧所使用的 backBuffer 索引。逐帧 0/1 交替。
 	int m_backBufferIndex = 0;
+
+	int m_nRTVDescriptorSize;
+	int m_nDSVDescriptorSize;
+	int m_nSamplerDescriptorSize;
+	int m_nCBSRUAVDescriptorSize;
 };
 

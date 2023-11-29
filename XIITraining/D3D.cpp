@@ -44,10 +44,10 @@ void D3D::Init()
 	// 那么该描述符在堆中的起始字节就是 32 * 3 = 96。
 	// note：DX12中，一个描述符堆下的所有 描述符 类型一致。不会出现 DSV/RTV/XX... 混在一个堆里的情况。
 	// 作为初学者，可以先不管它们的含义是什么。先把获取大小、字节偏移的概念理解就好。
-	int nRTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	int nDSVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	int nSamplerDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-	int nCBSRUAVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_nRTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_nDSVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+	m_nSamplerDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	m_nCBSRUAVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	// 创建交换链
 	CreateSwapChain();
@@ -134,6 +134,8 @@ void D3D::CreateDescriptorHeap()
 	m_pDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&m_pRTVHeap));
 	m_pDevice->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&m_pDSVHeap));
 
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart());
+
 	// 创建交换链的两个RT
 	ComPtr<ID3D12Resource> pSwapChainRT[2]; // m_swapChainBufferCount == 2
 	for (int i = 0; i < m_swapChainBufferCount; i++)
@@ -141,15 +143,81 @@ void D3D::CreateDescriptorHeap()
 		// 获取其中一个RT
 		m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pSwapChainRT[i]));
 
-		// 为其创建一个RTV
-		m_pSwapChain->
+		// 为其创建一个RTV描述符。
+		// 如果熟悉DX11的话，其实View和Sampler，就是描述符。
+		// 但在对应的RTV描述符堆创建具体的RTV描述符的时候，DX12 Device，并没有 "创建描述符" 这样的说法。
+		// 而是保留了DX11的风格 叫做 "创建 View"/"创建Sampler"。
+		// 但是，这和DX11本质上有区别。
+		//		DX11：直接创建RTV本身
+		//		DX12：在RTV描述符堆里，创建一个指向RTV的指针。
+		m_pDevice->CreateRenderTargetView(pSwapChainRT[i].Get(), nullptr, rtvHandle); // 在 rtvHandle 对应的 RTV描述符堆里，创建一个RTV。
+		rtvHandle.Offset(1, m_nRTVDescriptorSize);
 	}
+
+	// 创建深度Buffer资源的描述类型
+	// 交换链的RT不需要创建这个，如前面的方法所述，创建交换链的RT时，使用专门的DXGI_SWAP_CHAIN_DESC
+	//		（换句话说，如果你想创建一个普通RT，还是需要使用下面的 D3D12_RESOURCE_DESC 创建）
+	D3D12_RESOURCE_DESC depthDesc;
+	depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	depthDesc.MipLevels = 1;
+	depthDesc.Width = m_width;
+	depthDesc.Height = m_height;
+	depthDesc.DepthOrArraySize = 1;
+	depthDesc.SampleDesc.Count = 1;
+	depthDesc.SampleDesc.Quality = 0;
+	depthDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	// 在DX12中，创建纹理资源的时候，需要明确：这个资源将提交到什么样的堆里？
+	// 这里所谓的堆，就是GPU中的若干显存块。在现代GPU中，显存块的类型包括：
+	// 1. 默认堆：GPU 可访问，CPU 永远不可访问。
+	// 2. 上传堆：这个堆中的资源始终在等待将它们从 CPU 上传到 GPU。
+	// 3. 回读堆：这个堆中的资源始终在等待 CPU 读取它们。
+	// 4. 自定义堆：（特性相对高级，萌新暂时不用看）
+	D3D12_HEAP_PROPERTIES heapProps;
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+	// 创建深度Buffer资源本体
+	// 当然，如上面所述，交换链的RT也不需要创建这个。
+	// 下面的参数中，没有提到的有两个：
+	// D3D12_HEAP_FLAG_NONE：先不用管，让它等于none就行。
+	// 
+	// D3D12_RESOURCE_STATE_COMMON：资源状态。COMMON表示这是资源转换规则中的初始状态。
+	// 资源状态：可以理解成 DX12 的新概念。（尽管本质上 DX11 也有资源转换，但都封装在驱动层，DX11 API调用者通常不需要考虑这些。）
+	//		以这里的 深度buffer 为例，最开始的状态是 D3D12_RESOURCE_STATE_COMMON，表示这个资源是可用的，但是还没有被任何流水线使用。
+	//		之后，当我们将它绑定到流水线的某个阶段时，就需要将它转换为对应的状态，比如 D3D12_RESOURCE_STATE_DEPTH_WRITE。
+	//		之后，当我们将它从流水线的某个阶段解绑时，就需要将它转换回 D3D12_RESOURCE_STATE_COMMON。
+	// 
+	// 一个更完善的资源状态流程：// 如果是一个 RT 资源，则：
+	//		将其设置为RT并绑定到流水线之前，应将其设置为 D3D12_RESOURCE_STATE_RENDER_TARGET；
+	//		在 Present 执行之前，应将其转换为 D3D12_RESOURCE_STATE_PRESENT。
+	//		如果这个 RT 指向的Buffer，需要在下一个 pass 用作SRV输入，则：
+	//			如果该 pass 是 PixelShader，应将其转换为 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE。
+	//			如果该 pass 是 ComputeShader，应将其转换为 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE。
+	// 
+	//	总而言之，在一个渲染帧的整个过程中，需要根据各种情况，在Buffer使用前，将其转换成不同的资源状态。
+	CD3DX12_CLEAR_VALUE clearValue(DXGI_FORMAT_D24_UNORM_S8_UINT, 1.0f, 0x00);
+	m_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_pDepthStencilBuffer));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_pDSVHeap->GetCPUDescriptorHandleForHeapStart());
+	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
+}
+
+void D3D::Prepare()
+{
+	// 设置视口
+	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
+	m_pCommandList->RSSetViewports(1, &vp);
+
+
+	CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 }
 
 void D3D::Render()
 {
 	m_backBufferIndex++;
-
 
 	// 定位实际的RTV // 每帧使用不同的 RTV，所以需要偏移指针
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pRTVHeap->GetCPUDescriptorHandleForHeapStart();
@@ -157,5 +225,4 @@ void D3D::Render()
 
 	// 定位实际的DSV
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = pDSVHeap->GetCPUDescriptorHandleForHeapStart();
-
 }
