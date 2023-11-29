@@ -10,7 +10,7 @@ public:
 
 	void Init();
 
-	void Run() {}
+	void Run();
 	void Release();
 
 private:

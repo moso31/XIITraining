@@ -49,11 +49,11 @@ void D3D::Init()
 	m_nSamplerDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	m_nCBSRUAVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	// 创建交换链
-	CreateSwapChain();
-
 	// 创建命令队列、命令分配器、命令列表
 	CreateCommandObjects();
+
+	// 创建交换链
+	CreateSwapChain();
 
 	// 创建描述符堆
 	CreateDescriptorHeap();
@@ -127,9 +127,9 @@ void D3D::CreateDescriptorHeap()
 
 	D3D12_DESCRIPTOR_HEAP_DESC DSVHeapDesc;
 	DSVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	DSVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	DSVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 	DSVHeapDesc.NodeMask = 0;
-	DSVHeapDesc.NumDescriptors = m_swapChainBufferCount;
+	DSVHeapDesc.NumDescriptors = 1;
 
 	m_pDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&m_pRTVHeap));
 	m_pDevice->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&m_pDSVHeap));
@@ -137,11 +137,10 @@ void D3D::CreateDescriptorHeap()
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart());
 
 	// 创建交换链的两个RT
-	ComPtr<ID3D12Resource> pSwapChainRT[2]; // m_swapChainBufferCount == 2
 	for (int i = 0; i < m_swapChainBufferCount; i++)
 	{
 		// 获取其中一个RT
-		m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pSwapChainRT[i]));
+		m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&m_pSwapChainRT[i]));
 
 		// 为其创建一个RTV描述符。
 		// 如果熟悉DX11的话，其实View和Sampler，就是描述符。
@@ -150,13 +149,13 @@ void D3D::CreateDescriptorHeap()
 		// 但是，这和DX11本质上有区别。
 		//		DX11：直接创建RTV本身
 		//		DX12：在RTV描述符堆里，创建一个指向RTV的指针。
-		m_pDevice->CreateRenderTargetView(pSwapChainRT[i].Get(), nullptr, rtvHandle); // 在 rtvHandle 对应的 RTV描述符堆里，创建一个RTV。
+		m_pDevice->CreateRenderTargetView(m_pSwapChainRT[i].Get(), nullptr, rtvHandle); // 在 rtvHandle 对应的 RTV描述符堆里，创建一个RTV。
 		rtvHandle.Offset(1, m_nRTVDescriptorSize);
 	}
 
-	// 创建深度Buffer资源的描述类型
-	// 交换链的RT不需要创建这个，如前面的方法所述，创建交换链的RT时，使用专门的DXGI_SWAP_CHAIN_DESC
-	//		（换句话说，如果你想创建一个普通RT，还是需要使用下面的 D3D12_RESOURCE_DESC 创建）
+	// 创建深度Buffer资源的desc
+	// 交换链的BackBuffer不需要创建这个，如前面的方法所述，创建交换链的BackBuffer时，使用专门的DXGI_SWAP_CHAIN_DESC
+	//		（但是如果你想创建一个普通RT，还是要使用这里的 D3D12_RESOURCE_DESC 创建）
 	D3D12_RESOURCE_DESC depthDesc;
 	depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -168,6 +167,7 @@ void D3D::CreateDescriptorHeap()
 	depthDesc.SampleDesc.Quality = 0;
 	depthDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	depthDesc.Alignment = 0;
 
 	// 在DX12中，创建纹理资源的时候，需要明确：这个资源将提交到什么样的堆里？
 	// 这里所谓的堆，就是GPU中的若干显存块。在现代GPU中，显存块的类型包括：
@@ -176,7 +176,12 @@ void D3D::CreateDescriptorHeap()
 	// 3. 回读堆：这个堆中的资源始终在等待 CPU 读取它们。
 	// 4. 自定义堆：（特性相对高级，萌新暂时不用看）
 	D3D12_HEAP_PROPERTIES heapProps;
-	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;  // 指定堆类型为 1.默认堆
+	heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;  // CPU页面属性不适用于默认堆
+	heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;  // 内存池偏好设置为未知，因为这是默认堆
+	heapProps.CreationNodeMask = 0;  // 创建节点掩码，用于多GPU系统，0表示所有GPU节点
+	heapProps.VisibleNodeMask = 0;   // 可见节点掩码，用于多GPU系统，0表示所有GPU节点
+
 
 	// 创建深度Buffer资源本体
 	// 当然，如上面所述，交换链的RT也不需要创建这个。
@@ -204,25 +209,90 @@ void D3D::CreateDescriptorHeap()
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
+{
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
+{
+	return m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
+}
+
+ID3D12Resource* D3D::GetSwapChainBackBuffer() const
+{
+	return m_pSwapChainRT[m_pSwapChain->GetCurrentBackBufferIndex()].Get();
+}
+
 void D3D::Prepare()
 {
-	// 设置视口
-	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
-	m_pCommandList->RSSetViewports(1, &vp);
-
-
-	CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	m_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 }
 
 void D3D::Render()
 {
-	m_backBufferIndex++;
+	HRESULT hr;
+	hr = m_pCommandAllocator->Reset();
 
-	// 定位实际的RTV // 每帧使用不同的 RTV，所以需要偏移指针
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pRTVHeap->GetCPUDescriptorHandleForHeapStart();
-	rtvHandle.ptr = { rtvHandle.ptr + (UINT64)(nRTVDescriptorSize * m_backBufferIndex) }; 
+	hr = m_pCommandList->Reset(m_pCommandAllocator.Get(), nullptr);
 
-	// 定位实际的DSV
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = pDSVHeap->GetCPUDescriptorHandleForHeapStart();
+	// 设置当前帧 backBuffer 的资源状态为 RENDERTARGET。
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_pCommandList->ResourceBarrier(1, &barrier);
+
+	// 设置当前帧 depthBuffer 的资源状态为 DEPTHWRITE。
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	m_pCommandList->ResourceBarrier(1, &barrier);
+
+	// 设置视口
+	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
+	m_pCommandList->RSSetViewports(1, &vp);
+
+	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
+	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
+	m_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
+	m_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
+
+	m_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
+
+	// Clear，SetRT执行完，将资源状态重置回 PRESENT
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	m_pCommandList->ResourceBarrier(1, &barrier);
+
+	// Clear，SetRT执行完，将资源状态重置回 COMMON
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON);
+	m_pCommandList->ResourceBarrier(1, &barrier);
+
+	m_pCommandList->Close();
+
+	ID3D12CommandList* pCmdLists[] = { m_pCommandList.Get() };
+	m_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
+
+	m_pSwapChain->Present(0, 0);
+
+	FlushCommandQueue();
+}
+
+void D3D::FlushCommandQueue()
+{
+	m_currFenceIdx++;
+	// 通过 Signal，告知GPU：在 Queue 执行完毕后，将值设置到 m_currFenceIdx
+	m_pCommandQueue->Signal(m_pFence.Get(), m_currFenceIdx);
+
+	if (m_pFence->GetCompletedValue() < m_currFenceIdx)
+	{
+		// 创建一个 Windows 事件 fenceEvent。
+		HANDLE fenceEvent = CreateEvent(nullptr, false, false, nullptr);
+
+		// 通过下面的方法告知 GPU 值达到 m_currFenceIdx 事件时，向 CPU 推送一个 fenceEvent。
+		m_pFence->SetEventOnCompletion(m_currFenceIdx, fenceEvent);
+
+		// 让 Windows 持续等待这个 fence。
+		// 换言之，CPU 这边将持续等待，直到 GPU 那边的值确实的变化到 m_currFenceIdx。
+		WaitForSingleObject(fenceEvent, INFINITE);
+
+		// 当执行到这里，说明 GPU 的值已经确实的变化到 m_currFenceIdx 了。
+		// 这时就可以将这个事件关闭掉了。
+		// 这样也就完成了一次 CPU 和 GPU 之间的通信同步。
+		CloseHandle(fenceEvent);
+	}
 }

@@ -6,6 +6,11 @@ void App::Init()
 	InitD3D();
 }
 
+void App::Run()
+{
+	m_dx->Render();
+}
+
 void App::Release()
 {
 	m_dx->Release();
