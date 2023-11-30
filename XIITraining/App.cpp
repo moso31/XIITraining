@@ -8,13 +8,13 @@ void App::Init()
 
 void App::Run()
 {
-	m_dx->Render();
+	g_dx->Render();
 }
 
 void App::Release()
 {
-	m_dx->Release();
-	m_dx = nullptr;
+	g_dx->Release();
+	g_dx = nullptr;
 }
 
 void App::InitWindow()
@@ -48,6 +48,6 @@ void App::InitWindow()
 
 void App::InitD3D()
 {
-	m_dx = new D3D(m_width, m_height, m_hWnd);
-	m_dx->Init();
+	g_dx = new D3D(m_width, m_height, m_hWnd);
+	g_dx->Init();
 }

@@ -4,9 +4,13 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="App.cpp" />
     <ClCompile Include="D3D.cpp" />
+    <ClCompile Include="Mesh.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
     <ClInclude Include="D3D.h" />
+    <ClInclude Include="ShaderStructures.h" />
+    <ClInclude Include="Mesh.h" />
+    <ClInclude Include="header.h" />
   </ItemGroup>
 </Project>

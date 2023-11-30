@@ -18,7 +18,6 @@ private:
 	void InitD3D();
 
 private:
-	D3D* m_dx = nullptr;
 	HINSTANCE m_hInstance = NULL;
 	HWND m_hWnd = NULL;
 

@@ -31,10 +31,10 @@ void D3D::Init()
 	// ID3D12Device 也分成若干版本，由于版本太多了，挑最主要的说：
 	// 从 ID3D12Device4 开始，增加了对光线追踪功能的接口支持。
 	// 越老的版本兼容性和稳定性越强。自己酌情选择。
-	hr = D3D12CreateDevice(pAdapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_pDevice));
+	hr = D3D12CreateDevice(pAdapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&g_pDevice));
 
 	// 创建 Fence 用于同步 CPU 和 GPU 的操作。
-	hr = m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence));
+	hr = g_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence));
 
 	// 获取 描述符堆 的 句柄增量大小。
 	// 句柄增量大小：是 DX12 的新概念。在 DX12 中，使用 描述符堆 存储 描述符。
@@ -44,10 +44,10 @@ void D3D::Init()
 	// 那么该描述符在堆中的起始字节就是 32 * 3 = 96。
 	// note：DX12中，一个描述符堆下的所有 描述符 类型一致。不会出现 DSV/RTV/XX... 混在一个堆里的情况。
 	// 作为初学者，可以先不管它们的含义是什么。先把获取大小、字节偏移的概念理解就好。
-	m_nRTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	m_nDSVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	m_nSamplerDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-	m_nCBSRUAVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_nRTVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_nDSVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+	m_nSamplerDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	m_nCBSRUAVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	// 创建命令队列、命令分配器、命令列表
 	CreateCommandObjects();
@@ -68,21 +68,21 @@ void D3D::CreateCommandObjects()
 	HRESULT hr;
 
 	// 创建命令队列
-	hr = m_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_pCommandQueue));
+	hr = g_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&g_pCommandQueue));
 
 	// 创建命令分配器
-	hr = m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_pCommandAllocator));
+	hr = g_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_pCommandAllocator));
 
 	// 创建命令列表，并将其和 命令分配器 关联
 	// 同时设定初始渲染管线状态 = nullptr（默认状态）
-	hr = m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_pCommandList));
+	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
 
 	// 初始默认关闭命令列表
 	// 虽然并非官方规定，但这是一个常见实践做法。
 	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
 	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
 	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
-	m_pCommandList->Close();
+	g_pCommandList->Close();
 }
 
 void D3D::CreateSwapChain()
@@ -113,7 +113,7 @@ void D3D::CreateSwapChain()
 
 	// 创建交换链 并且 转换成 IDXGISwapChain4
 	ComPtr<IDXGISwapChain> pSwapChain;
-	hr = m_pDXGIFactory->CreateSwapChain(m_pCommandQueue.Get(), &swapChainDesc, &pSwapChain);
+	hr = m_pDXGIFactory->CreateSwapChain(g_pCommandQueue.Get(), &swapChainDesc, &pSwapChain);
 	hr = pSwapChain.As(&m_pSwapChain);
 }
 
@@ -131,8 +131,8 @@ void D3D::CreateDescriptorHeap()
 	DSVHeapDesc.NodeMask = 0;
 	DSVHeapDesc.NumDescriptors = 1;
 
-	m_pDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&m_pRTVHeap));
-	m_pDevice->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&m_pDSVHeap));
+	g_pDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&m_pRTVHeap));
+	g_pDevice->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&m_pDSVHeap));
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -149,7 +149,7 @@ void D3D::CreateDescriptorHeap()
 		// 但是，这和DX11本质上有区别。
 		//		DX11：直接创建RTV本身
 		//		DX12：在RTV描述符堆里，创建一个指向RTV的指针。
-		m_pDevice->CreateRenderTargetView(m_pSwapChainRT[i].Get(), nullptr, rtvHandle); // 在 rtvHandle 对应的 RTV描述符堆里，创建一个RTV。
+		g_pDevice->CreateRenderTargetView(m_pSwapChainRT[i].Get(), nullptr, rtvHandle); // 在 rtvHandle 对应的 RTV描述符堆里，创建一个RTV。
 		rtvHandle.Offset(1, m_nRTVDescriptorSize);
 	}
 
@@ -203,10 +203,11 @@ void D3D::CreateDescriptorHeap()
 	// 
 	//	总而言之，在一个渲染帧的整个过程中，需要根据各种情况，在Buffer使用前，将其转换成不同的资源状态。
 	CD3DX12_CLEAR_VALUE clearValue(DXGI_FORMAT_D24_UNORM_S8_UINT, 1.0f, 0x00);
-	m_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_pDepthStencilBuffer));
+	g_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_pDepthStencilBuffer));
 
+	// 创建DSV描述符。和前面创建RTV描述符同理。
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_pDSVHeap->GetCPUDescriptorHandleForHeapStart());
-	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
+	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -231,41 +232,41 @@ void D3D::Prepare()
 void D3D::Render()
 {
 	HRESULT hr;
-	hr = m_pCommandAllocator->Reset();
+	hr = g_pCommandAllocator->Reset();
 
-	hr = m_pCommandList->Reset(m_pCommandAllocator.Get(), nullptr);
+	hr = g_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
 
 	// 设置当前帧 backBuffer 的资源状态为 RENDERTARGET。
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置当前帧 depthBuffer 的资源状态为 DEPTHWRITE。
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置视口
 	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
-	m_pCommandList->RSSetViewports(1, &vp);
+	g_pCommandList->RSSetViewports(1, &vp);
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	m_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
-	m_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
+	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
 
-	m_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
+	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// Clear，SetRT执行完，将资源状态重置回 COMMON
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
-	m_pCommandList->Close();
+	g_pCommandList->Close();
 
-	ID3D12CommandList* pCmdLists[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
+	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
+	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
 	m_pSwapChain->Present(0, 0);
 
@@ -276,7 +277,7 @@ void D3D::FlushCommandQueue()
 {
 	m_currFenceIdx++;
 	// 通过 Signal，告知GPU：在 Queue 执行完毕后，将值设置到 m_currFenceIdx
-	m_pCommandQueue->Signal(m_pFence.Get(), m_currFenceIdx);
+	g_pCommandQueue->Signal(m_pFence.Get(), m_currFenceIdx);
 
 	if (m_pFence->GetCompletedValue() < m_currFenceIdx)
 	{

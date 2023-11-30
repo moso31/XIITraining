@@ -1,14 +1,5 @@
 #pragma once
-#include <d3d12.h>
-#include <dxgi1_6.h>
-#include <wrl.h>
-#include <DirectXColors.h>
-#include <d3dx12.h>
-
-using namespace Microsoft::WRL;
-
-#pragma comment(lib, "d3d12.lib")
-#pragma comment(lib, "dxgi.lib")
+#include "header.h"
 
 class D3D
 {
@@ -36,17 +27,10 @@ private:
 	ID3D12Resource* GetSwapChainBackBuffer() const;
 
 private:
-	// 我的 Win10 版本不是最新的，只支持到 Device8
-	ComPtr<ID3D12Device8> m_pDevice;
 	ComPtr<IDXGIFactory7> m_pDXGIFactory;
 	ComPtr<IDXGISwapChain4> m_pSwapChain;
 
 	ComPtr<ID3D12Fence1> m_pFence;
-
-	// 命令队列相关，目前仅使用一个队列，一个分配器，一个列表
-	ComPtr<ID3D12CommandQueue> m_pCommandQueue; // 命令队列
-	ComPtr<ID3D12CommandAllocator> m_pCommandAllocator; // 命令分配器
-	ComPtr<ID3D12GraphicsCommandList> m_pCommandList; // 命令列表
 
 	// 交换链使用的描述符堆
 	ComPtr<ID3D12DescriptorHeap> m_pRTVHeap;
