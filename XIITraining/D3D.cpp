@@ -75,14 +75,14 @@ void D3D::CreateCommandObjects()
 
 	// 创建命令列表，并将其和 命令分配器 关联
 	// 同时设定初始渲染管线状态 = nullptr（默认状态）
-	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
+	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_pCommandList));
 
 	// 初始默认关闭命令列表
 	// 虽然并非官方规定，但这是一个常见实践做法。
 	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
 	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
 	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
-	g_pCommandList->Close();
+	m_pCommandList->Close();
 }
 
 void D3D::CreateSwapChain()
@@ -234,38 +234,38 @@ void D3D::Render()
 	HRESULT hr;
 	hr = g_pCommandAllocator->Reset();
 
-	hr = g_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
+	hr = m_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
 
 	// 设置当前帧 backBuffer 的资源状态为 RENDERTARGET。
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	g_pCommandList->ResourceBarrier(1, &barrier);
+	m_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置当前帧 depthBuffer 的资源状态为 DEPTHWRITE。
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	g_pCommandList->ResourceBarrier(1, &barrier);
+	m_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置视口
 	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
-	g_pCommandList->RSSetViewports(1, &vp);
+	m_pCommandList->RSSetViewports(1, &vp);
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
-	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
+	m_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
+	m_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
 
-	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
+	m_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	g_pCommandList->ResourceBarrier(1, &barrier);
+	m_pCommandList->ResourceBarrier(1, &barrier);
 
 	// Clear，SetRT执行完，将资源状态重置回 COMMON
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON);
-	g_pCommandList->ResourceBarrier(1, &barrier);
+	m_pCommandList->ResourceBarrier(1, &barrier);
 
-	g_pCommandList->Close();
+	m_pCommandList->Close();
 
-	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
+	ID3D12CommandList* pCmdLists[] = { m_pCommandList.Get() };
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
 	m_pSwapChain->Present(0, 0);
