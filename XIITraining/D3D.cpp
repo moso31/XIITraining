@@ -1,4 +1,5 @@
 #include "D3D.h"
+#include "Mesh.h"
 
 void D3D::Init()
 {
@@ -57,6 +58,10 @@ void D3D::Init()
 
 	// 创建描述符堆
 	CreateDescriptorHeap();
+
+	CreateGlobalConstantBuffers();
+
+	m_pMesh->InitBox();
 }
 
 void D3D::CreateCommandObjects()
@@ -75,14 +80,14 @@ void D3D::CreateCommandObjects()
 
 	// 创建命令列表，并将其和 命令分配器 关联
 	// 同时设定初始渲染管线状态 = nullptr（默认状态）
-	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_pCommandList));
+	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
 
 	// 初始默认关闭命令列表
 	// 虽然并非官方规定，但这是一个常见实践做法。
 	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
 	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
 	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
-	m_pCommandList->Close();
+	g_pCommandList->Close();
 }
 
 void D3D::CreateSwapChain()
@@ -210,6 +215,40 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
+void D3D::CreateGlobalConstantBuffers()
+{
+	// 创建全局常量缓冲区，存储MVP矩阵
+	// 对这种每帧都需要更新的，准备一个上传堆就够了，不需要准备默认堆。默认堆是给静态的玩意（比如Mesh的纹理，VBIB）使用的
+	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
+
+	g_pDevice->CreateCommittedResource(
+		&uploadHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(MeshTransformData)), // 资源描述
+		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为READ（允许CPU写入数据）
+		nullptr,
+		IID_PPV_ARGS(&m_pObjectCBUpload)
+	);
+
+	// 创建全局常量缓冲区的描述符
+	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
+	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 常量缓冲区描述符类型
+	cbvHeapDesc.NumDescriptors = 1; // 按照规划，只有 m_pObjectCBUpload 这一个 cbv
+	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // Shader 可见
+	cbvHeapDesc.NodeMask = 0; // 0表示所有节点。节点就是GPU，多GPU的设备可以用这个参数来指定使用哪个GPU
+
+	g_pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pObjectCBVHeap));
+
+	// 获取全局常量缓冲区的描述符句柄，下面紧接着的创建视图要用
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pObjectCBVHeap->GetCPUDescriptorHandleForHeapStart());
+
+	// 创建全局常量缓冲区的描述符视图
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+	cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
+	cbvDesc.SizeInBytes = sizeof(MeshTransformData); // 常量缓冲区的大小
+	g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
+}
+
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
 {
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
@@ -225,8 +264,20 @@ ID3D12Resource* D3D::GetSwapChainBackBuffer() const
 	return m_pSwapChainRT[m_pSwapChain->GetCurrentBackBufferIndex()].Get();
 }
 
-void D3D::Prepare()
+void D3D::Update()
 {
+	// 暂时先使用固定的相机参数
+	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f), Vector3(0.0f, 1.0f, 0.0f));
+	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_height / (float)m_width, 0.01f, 1000.0f);
+
+	// World 的部分需要逐 Mesh 更新
+	m_pMesh->Update();
+
+	// 更新全局常量缓冲区，类似 DX11 中的 UpdateSubresource
+	MeshTransformData* pTransformData;
+	m_pObjectCBUpload->Map(0, nullptr, (void**)&pTransformData);
+	*pTransformData = g_cbObjectData;
+	m_pObjectCBUpload->Unmap(0, nullptr);
 }
 
 void D3D::Render()
@@ -234,38 +285,40 @@ void D3D::Render()
 	HRESULT hr;
 	hr = g_pCommandAllocator->Reset();
 
-	hr = m_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
+	hr = g_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
 
 	// 设置当前帧 backBuffer 的资源状态为 RENDERTARGET。
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置当前帧 depthBuffer 的资源状态为 DEPTHWRITE。
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 设置视口
 	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
-	m_pCommandList->RSSetViewports(1, &vp);
+	g_pCommandList->RSSetViewports(1, &vp);
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	m_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
-	m_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
+	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
 
-	m_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
+	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// Clear，SetRT执行完，将资源状态重置回 COMMON
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON);
-	m_pCommandList->ResourceBarrier(1, &barrier);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
-	m_pCommandList->Close();
+	RenderMeshes();
 
-	ID3D12CommandList* pCmdLists[] = { m_pCommandList.Get() };
+	g_pCommandList->Close();
+
+	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
 	m_pSwapChain->Present(0, 0);
@@ -296,4 +349,9 @@ void D3D::FlushCommandQueue()
 		// 这样也就完成了一次 CPU 和 GPU 之间的通信同步。
 		CloseHandle(fenceEvent);
 	}
+}
+
+void D3D::RenderMeshes()
+{
+	m_pMesh->Render();
 }

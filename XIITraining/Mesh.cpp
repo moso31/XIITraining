@@ -64,11 +64,11 @@ void Mesh::InitBox()
 		20, 22, 23
 	};
 
-	UpdateVB();
-	UpdateIB();
+	CreateVB();
+	CreateIB();
 }
 
-void Mesh::UpdateVB()
+void Mesh::CreateVB()
 {
 	// 创建一个默认堆和一个上传堆
 	CD3DX12_HEAP_PROPERTIES defaultHeapProp(D3D12_HEAP_TYPE_DEFAULT);
@@ -115,7 +115,7 @@ void Mesh::UpdateVB()
 	// 在GPU真正将这段逻辑执行完之前，这些 Resource 都不能被释放！
 }
 
-void Mesh::UpdateIB()
+void Mesh::CreateIB()
 {
 	// 注释略，同UpdateVB。
 	CD3DX12_HEAP_PROPERTIES defaultHeapProp(D3D12_HEAP_TYPE_DEFAULT);
@@ -151,6 +151,12 @@ void Mesh::UpdateIB()
 	g_pCommandList->CopyBufferRegion(m_pIB.Get(), 0, m_pIBUpload.Get(), 0, subData.RowPitch);
 
 	g_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pIB.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER));
+}
+
+void Mesh::Update()
+{
+	m_mxWorld = Matrix::Identity();
+	g_cbObjectData.m_world = m_mxWorld;
 }
 
 void Mesh::Render()

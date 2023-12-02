@@ -6,9 +6,12 @@ class Mesh
 public:
 	void InitBox();
 
-	void UpdateVB();
-	void UpdateIB();
+	void Update();
 	void Render();
+
+private:
+	void CreateVB();
+	void CreateIB();
 
 private:
 	std::vector<VertexPNTC> m_vertices;
@@ -18,5 +21,7 @@ private:
 	ComPtr<ID3D12Resource> m_pIB;
 	ComPtr<ID3D12Resource> m_pVBUpload;
 	ComPtr<ID3D12Resource> m_pIBUpload;
+
+	Matrix m_mxWorld;
 };
 

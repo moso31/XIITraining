@@ -12,3 +12,10 @@ struct VertexPNTC
 	Vector2 uv = Vector2(0.0f);
 	Vector4 col = Vector4(0.0f);
 };
+
+struct MeshTransformData
+{
+	Matrix m_world;
+	Matrix m_view;
+	Matrix m_proj;
+};

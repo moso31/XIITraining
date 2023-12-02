@@ -7,6 +7,8 @@
 
 #include <vector>
 
+#include "ShaderStructures.h"
+
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
@@ -23,3 +25,5 @@ ComPtr<ID3D12Device8> g_pDevice;
 ComPtr<ID3D12CommandQueue> g_pCommandQueue; // 命令队列
 ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
 ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
+
+MeshTransformData g_cbObjectData;

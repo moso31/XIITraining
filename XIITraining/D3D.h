@@ -1,6 +1,8 @@
 #pragma once
 #include "header.h"
 
+class Mesh;
+
 class D3D
 {
 public:
@@ -9,22 +11,25 @@ public:
 
 	void Init();
 
-	void CreateCommandObjects();
-	void CreateSwapChain();
-	void CreateDescriptorHeap();
-
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferRTV();
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferDSV();
-
-	void Prepare();
+	void Update();
 	void Render();
 
 	void FlushCommandQueue();
 
 	void Release() {}
 
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferRTV();
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferDSV();
+
 private:
 	ID3D12Resource* GetSwapChainBackBuffer() const;
+
+	void CreateCommandObjects();
+	void CreateSwapChain();
+	void CreateDescriptorHeap();
+	void CreateGlobalConstantBuffers();
+
+	void RenderMeshes();
 
 private:
 	ComPtr<IDXGIFactory7> m_pDXGIFactory;
@@ -35,6 +40,9 @@ private:
 	// 交换链使用的描述符堆
 	ComPtr<ID3D12DescriptorHeap> m_pRTVHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pDSVHeap;
+
+	// pObjectCB全局常量缓冲区使用的描述符堆
+	ComPtr<ID3D12DescriptorHeap> m_pObjectCBVHeap;
 
 	HWND m_hWnd;
 
@@ -55,5 +63,8 @@ private:
 	int m_nCBSRUAVDescriptorSize;
 
 	UINT64 m_currFenceIdx = 0;
+
+	ComPtr<ID3D12Resource> m_pObjectCBUpload;
+	Mesh* m_pMesh = nullptr;
 };
 
