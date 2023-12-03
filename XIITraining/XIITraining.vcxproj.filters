@@ -5,6 +5,7 @@
     <ClCompile Include="App.cpp" />
     <ClCompile Include="D3D.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="header.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -12,5 +13,8 @@
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="header.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Color.fx" />
   </ItemGroup>
 </Project>

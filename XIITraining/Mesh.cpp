@@ -1,5 +1,4 @@
 #include "Mesh.h"
-#include "ShaderStructures.h"
 
 void Mesh::InitBox()
 {
@@ -74,25 +73,29 @@ void Mesh::CreateVB()
 	CD3DX12_HEAP_PROPERTIES defaultHeapProp(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 
+	CD3DX12_RESOURCE_DESC vbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(VertexPNTC) * m_vertices.size());
+
 	// 创建一个顶点缓冲默认资源
 	g_pDevice->CreateCommittedResource(
 		&defaultHeapProp, // 指定堆的类型
 		D3D12_HEAP_FLAG_NONE, // 堆的标志
-		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(VertexPNTC) * m_vertices.size()), // 资源描述
-		D3D12_RESOURCE_STATE_GENERIC_READ, 
+		&vbDesc, // 资源描述
+		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&m_pVB)
 	);
+	m_pVB->SetName(L"Mesh VB");
 
 	// 创建一个顶点缓冲上传资源
 	g_pDevice->CreateCommittedResource(
 		&uploadHeapProp,
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(VertexPNTC) * m_vertices.size()),
-		D3D12_RESOURCE_STATE_COPY_DEST, // 初始的资源状态为COPY_DEST（复制目标，因为接下来必然有一个 从上传堆将数据复制过来的过程）
+		&vbDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为COPY_DEST（复制目标，因为接下来必然有一个 从上传堆将数据复制过来的过程）
 		nullptr,
 		IID_PPV_ARGS(&m_pVBUpload)
 	);
+	m_pVBUpload->SetName(L"Mesh VB Upload");
 
 	// 使用一个制式数据 subdata，记录 m_vertices 的顶点信息
 	D3D12_SUBRESOURCE_DATA subData;
@@ -108,7 +111,8 @@ void Mesh::CreateVB()
 	g_pCommandList->CopyBufferRegion(m_pVB.Get(), 0, m_pVBUpload.Get(), 0, subData.RowPitch);
 
 	// 当 GPU 将上述流程执行完毕，VB 的资源状态将发生了变化，所以需要改变 m_pVB 标记的资源状态，改为正式的VertexBuffer类型：
-	g_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pVB.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER));
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pVB.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 
 	// 注意：上面的流程只是对写入 cmdList 流程的记录。实际的GPU逻辑此时并未执行！
 	// 真正将数据传输到GPU中，还需要 cmdQueue 确实的执行了 cmdList 以后 才行。
@@ -121,23 +125,27 @@ void Mesh::CreateIB()
 	CD3DX12_HEAP_PROPERTIES defaultHeapProp(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 
+	auto ibDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * m_indices.size());
+
 	g_pDevice->CreateCommittedResource(
 		&defaultHeapProp, // 指定堆的类型
 		D3D12_HEAP_FLAG_NONE, // 堆的标志
-		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * m_indices.size()), // 资源描述
+		&ibDesc, // 资源描述
 		D3D12_RESOURCE_STATE_COPY_DEST, // 初始的资源状态为COPY_DEST（复制目标，因为接下来必然有一个 从上传堆将数据复制过来的过程）
 		nullptr,
 		IID_PPV_ARGS(&m_pIB)
 	);
+	m_pIB->SetName(L"Mesh IB");
 
 	g_pDevice->CreateCommittedResource(
 		&uploadHeapProp,
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * m_indices.size()), // 资源描述
+		&ibDesc, // 资源描述
 		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为READ（允许CPU写入数据）
 		nullptr,
 		IID_PPV_ARGS(&m_pIBUpload)
 	);
+	m_pIBUpload->SetName(L"Mesh IB Upload");
 
 	D3D12_SUBRESOURCE_DATA subData;
 	subData.pData = m_indices.data();
@@ -150,12 +158,15 @@ void Mesh::CreateIB()
 	m_pIBUpload->Unmap(0, nullptr);
 	g_pCommandList->CopyBufferRegion(m_pIB.Get(), 0, m_pIBUpload.Get(), 0, subData.RowPitch);
 
-	g_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pIB.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER));
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pIB.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+	g_pCommandList->ResourceBarrier(1, &barrier);
 }
 
 void Mesh::Update()
 {
-	m_mxWorld = Matrix::Identity();
+	static float r = 0.0f;
+	r += 0.001f;
+	m_mxWorld = Matrix::CreateRotationY(r);
 	g_cbObjectData.m_world = m_mxWorld;
 }
 
@@ -163,15 +174,15 @@ void Mesh::Render()
 {
 	D3D12_VERTEX_BUFFER_VIEW vbv;
 	vbv.BufferLocation = m_pVB->GetGPUVirtualAddress();
-	vbv.SizeInBytes = m_vertices.size();
-	vbv.StrideInBytes = sizeof(VertexPNTC) * m_vertices.size();
+	vbv.StrideInBytes = sizeof(VertexPNTC); // 每个顶点的大小
+	vbv.SizeInBytes = vbv.StrideInBytes * (UINT)m_vertices.size(); // 整个顶点缓冲区的大小
 	g_pCommandList->IASetVertexBuffers(0, 1, &vbv);
 
 	D3D12_INDEX_BUFFER_VIEW ibv;
 	ibv.BufferLocation = m_pIB->GetGPUVirtualAddress();
-	ibv.SizeInBytes = m_indices.size();
+	ibv.SizeInBytes = sizeof(UINT) * (UINT)m_indices.size();
 	ibv.Format = DXGI_FORMAT_R32_UINT;
 	g_pCommandList->IASetIndexBuffer(&ibv);
 
-	g_pCommandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
+	g_pCommandList->DrawIndexedInstanced((UINT)m_indices.size(), 1, 0, 0, 0);
 }

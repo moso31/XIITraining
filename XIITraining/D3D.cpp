@@ -56,12 +56,29 @@ void D3D::Init()
 	// 创建交换链
 	CreateSwapChain();
 
+	CreateRootSignature();
+
 	// 创建描述符堆
 	CreateDescriptorHeap();
 
 	CreateGlobalConstantBuffers();
 
+	CreateShaderAndPSO();
+
+	m_pMesh = new Mesh();
 	m_pMesh->InitBox();
+	
+	// 初始化流程结束后，默认关闭命令列表
+	// 虽然并非官方规定，但这是一个常见实践做法。
+	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
+	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
+	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
+	g_pCommandList->Close();
+
+	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
+	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
+
+	FlushCommandQueue();
 }
 
 void D3D::CreateCommandObjects()
@@ -81,13 +98,6 @@ void D3D::CreateCommandObjects()
 	// 创建命令列表，并将其和 命令分配器 关联
 	// 同时设定初始渲染管线状态 = nullptr（默认状态）
 	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
-
-	// 初始默认关闭命令列表
-	// 虽然并非官方规定，但这是一个常见实践做法。
-	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
-	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
-	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
-	g_pCommandList->Close();
 }
 
 void D3D::CreateSwapChain()
@@ -96,7 +106,7 @@ void D3D::CreateSwapChain()
 
 	// 获取窗口大小
 	RECT rect;
-	GetClientRect(m_hWnd, &rect);
+	GetClientRect(g_hWnd, &rect);
 	UINT width = rect.right - rect.left;
 	UINT height = rect.bottom - rect.top;
 
@@ -111,7 +121,7 @@ void D3D::CreateSwapChain()
 	swapChainDesc.SampleDesc.Quality = 0; 
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // 用于RT
 	swapChainDesc.BufferCount = m_swapChainBufferCount; // 双缓冲
-	swapChainDesc.OutputWindow = m_hWnd; // 窗口句柄
+	swapChainDesc.OutputWindow = g_hWnd; // 窗口句柄
 	swapChainDesc.Windowed = true; // 窗口模式
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // 翻转模式
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH; // 允许全屏切换
@@ -146,6 +156,8 @@ void D3D::CreateDescriptorHeap()
 	{
 		// 获取其中一个RT
 		m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&m_pSwapChainRT[i]));
+		std::wstring wstr = std::wstring(L"SwapChainRT") + std::to_wstring(i);
+		m_pSwapChainRT[i]->SetName(wstr.c_str());
 
 		// 为其创建一个RTV描述符。
 		// 如果熟悉DX11的话，其实View和Sampler，就是描述符。
@@ -209,6 +221,7 @@ void D3D::CreateDescriptorHeap()
 	//	总而言之，在一个渲染帧的整个过程中，需要根据各种情况，在Buffer使用前，将其转换成不同的资源状态。
 	CD3DX12_CLEAR_VALUE clearValue(DXGI_FORMAT_D24_UNORM_S8_UINT, 1.0f, 0x00);
 	g_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_pDepthStencilBuffer));
+	m_pDepthStencilBuffer->SetName(L"Depth/Stencil Buffer");
 
 	// 创建DSV描述符。和前面创建RTV描述符同理。
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_pDSVHeap->GetCPUDescriptorHandleForHeapStart());
@@ -221,14 +234,16 @@ void D3D::CreateGlobalConstantBuffers()
 	// 对这种每帧都需要更新的，准备一个上传堆就够了，不需要准备默认堆。默认堆是给静态的玩意（比如Mesh的纹理，VBIB）使用的
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 
+	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)));
 	g_pDevice->CreateCommittedResource(
 		&uploadHeapProp,
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(sizeof(MeshTransformData)), // 资源描述
+		&cbDesc, // 资源描述
 		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为READ（允许CPU写入数据）
 		nullptr,
 		IID_PPV_ARGS(&m_pObjectCBUpload)
 	);
+	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
 	// 创建全局常量缓冲区的描述符
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
@@ -245,8 +260,128 @@ void D3D::CreateGlobalConstantBuffers()
 	// 创建全局常量缓冲区的描述符视图
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
 	cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
-	cbvDesc.SizeInBytes = sizeof(MeshTransformData); // 常量缓冲区的大小
+	cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
 	g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
+}
+
+void D3D::CreateRootSignature()
+{
+	// 创建根签名。这里的用于渲染Mesh的根签名的结构如下：
+	// -根签名0
+	// --根参数0：描述符表
+	// ---描述符0
+	// 每次 Render() 时，调用根签名即可。
+	CD3DX12_ROOT_PARAMETER rootParam[1];
+	CD3DX12_DESCRIPTOR_RANGE cbvTable;
+	cbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0); // 1个CBV，从0号开始
+	rootParam[0].InitAsDescriptorTable(1, &cbvTable); // 1个描述符表，存放在0号槽位
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(1, rootParam, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	ID3DBlob* signature;
+	D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
+	g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
+}
+
+void D3D::CreateShaderAndPSO()
+{
+	ComPtr<ID3DBlob> pVSBlob;
+	ComPtr<ID3DBlob> pErrorBlob;
+	ComPtr<ID3DBlob> pPSBlob;
+
+	HRESULT hr;
+
+	hr = D3DCompileFromFile(L".\\Color.fx", nullptr, nullptr, "VSMain", "vs_5_0", D3DCOMPILE_DEBUG, 0, &pVSBlob, &pErrorBlob);
+	if (FAILED(hr))
+	{
+		if (pErrorBlob)
+		{
+			std::string str = reinterpret_cast<const char*>(pErrorBlob->GetBufferPointer());
+			OutputDebugStringA(str.c_str());
+		}
+	}
+
+	hr = D3DCompileFromFile(L".\\Color.fx", nullptr, nullptr, "PSMain", "ps_5_0", D3DCOMPILE_DEBUG, 0, &pPSBlob, &pErrorBlob);
+	if (FAILED(hr))
+	{
+		if (pErrorBlob)
+		{
+			std::string str = reinterpret_cast<const char*>(pErrorBlob->GetBufferPointer());
+			OutputDebugStringA(str.c_str());
+		}
+	}
+
+	D3D12_INPUT_ELEMENT_DESC inputLayout[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc = {};
+	defaultRenderTargetBlendDesc.BlendEnable = false;
+	defaultRenderTargetBlendDesc.LogicOpEnable = false;
+	defaultRenderTargetBlendDesc.SrcBlend = D3D12_BLEND_ONE;
+	defaultRenderTargetBlendDesc.DestBlend = D3D12_BLEND_ONE;
+	defaultRenderTargetBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+	defaultRenderTargetBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	defaultRenderTargetBlendDesc.DestBlendAlpha = D3D12_BLEND_ONE;
+	defaultRenderTargetBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	defaultRenderTargetBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+
+	D3D12_BLEND_DESC blendState = {};
+	blendState.AlphaToCoverageEnable = false;
+	blendState.IndependentBlendEnable = false;
+	defaultRenderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		blendState.RenderTarget[i] = defaultRenderTargetBlendDesc;
+
+	D3D12_RASTERIZER_DESC rasterizerState = {};
+	rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	rasterizerState.FrontCounterClockwise = false;
+	rasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+	rasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+	rasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+	rasterizerState.DepthClipEnable = true;
+	rasterizerState.MultisampleEnable = false;
+	rasterizerState.AntialiasedLineEnable = false;
+	rasterizerState.ForcedSampleCount = 0;
+	rasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+	D3D12_DEPTH_STENCIL_DESC depthStencilState = {};
+	depthStencilState.DepthEnable = true;
+	depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	depthStencilState.StencilEnable = false;
+	depthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	depthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp =
+	{
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_COMPARISON_FUNC_ALWAYS
+	};
+	depthStencilState.FrontFace = defaultStencilOp;
+	depthStencilState.BackFace = defaultStencilOp;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+	psoDesc.pRootSignature = m_pRootSignature.Get();
+	psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize());
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize());
+	psoDesc.InputLayout = { inputLayout, _countof(inputLayout) };
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	psoDesc.BlendState = blendState;
+	psoDesc.RasterizerState = rasterizerState;
+	psoDesc.DepthStencilState = depthStencilState;
+	psoDesc.NumRenderTargets = 1;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.SampleDesc.Count = 1;
+	psoDesc.SampleDesc.Quality = 0;
+	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	g_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPipelineState));
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -267,8 +402,8 @@ ID3D12Resource* D3D::GetSwapChainBackBuffer() const
 void D3D::Update()
 {
 	// 暂时先使用固定的相机参数
-	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f), Vector3(0.0f, 1.0f, 0.0f));
-	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_height / (float)m_width, 0.01f, 1000.0f);
+	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_height / (float)m_width, 0.01f, 1000.0f).Transpose();
 
 	// World 的部分需要逐 Mesh 更新
 	m_pMesh->Update();
@@ -287,6 +422,14 @@ void D3D::Render()
 
 	hr = g_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
 
+	// 设置视口
+	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
+	g_pCommandList->RSSetViewports(1, &vp);
+
+	// 创建一个与视口大小相同的剪切矩形
+	CD3DX12_RECT scissorRect(0, 0, (LONG)m_width, (LONG)m_height);
+	g_pCommandList->RSSetScissorRects(1, &scissorRect);
+
 	// 设置当前帧 backBuffer 的资源状态为 RENDERTARGET。
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	g_pCommandList->ResourceBarrier(1, &barrier);
@@ -295,16 +438,14 @@ void D3D::Render()
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	g_pCommandList->ResourceBarrier(1, &barrier);
 
-	// 设置视口
-	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
-	g_pCommandList->RSSetViewports(1, &vp);
-
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Red, 0, nullptr);
-	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0x00, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Blue, 0, nullptr);
+	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
+
+	RenderMeshes();
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -313,8 +454,6 @@ void D3D::Render()
 	// Clear，SetRT执行完，将资源状态重置回 COMMON
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON);
 	g_pCommandList->ResourceBarrier(1, &barrier);
-
-	RenderMeshes();
 
 	g_pCommandList->Close();
 
@@ -353,5 +492,30 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
+	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
+
+	// CBV堆 绑定到 cmdList
+	ID3D12DescriptorHeap* ppHeaps[] = { m_pObjectCBVHeap.Get() };
+	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+	// 将 cbv 堆中的 描述符绑定到 cb slot 0.
+	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pObjectCBVHeap->GetGPUDescriptorHandleForHeapStart());
+
 	m_pMesh->Render();
+}
+
+void D3D::Release()
+{
+	if (m_pMesh)
+	{
+		delete m_pMesh;
+		m_pMesh = nullptr;
+	}
+}
+
+UINT D3DUtil::CalcBufferViewSize(UINT sizeInBytes)
+{
+	return (sizeInBytes + 255) & ~255;
 }

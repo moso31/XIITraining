@@ -3,10 +3,16 @@
 
 class Mesh;
 
+class D3DUtil
+{
+public:
+	static UINT CalcBufferViewSize(UINT sizeInBytes);
+};
+
 class D3D
 {
 public:
-	D3D(int width, int height, HWND hWnd) : m_width(width), m_height(height), m_hWnd(hWnd) {}
+	D3D(int width, int height) : m_width(width), m_height(height) {}
 	~D3D() {}
 
 	void Init();
@@ -16,7 +22,7 @@ public:
 
 	void FlushCommandQueue();
 
-	void Release() {}
+	void Release();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferRTV();
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSwapChainBackBufferDSV();
@@ -27,7 +33,10 @@ private:
 	void CreateCommandObjects();
 	void CreateSwapChain();
 	void CreateDescriptorHeap();
+
 	void CreateGlobalConstantBuffers();
+	void CreateRootSignature();
+	void CreateShaderAndPSO();
 
 	void RenderMeshes();
 
@@ -43,8 +52,6 @@ private:
 
 	// pObjectCB全局常量缓冲区使用的描述符堆
 	ComPtr<ID3D12DescriptorHeap> m_pObjectCBVHeap;
-
-	HWND m_hWnd;
 
 	int m_width = 0;
 	int m_height = 0;
@@ -65,6 +72,8 @@ private:
 	UINT64 m_currFenceIdx = 0;
 
 	ComPtr<ID3D12Resource> m_pObjectCBUpload;
+	ComPtr<ID3D12RootSignature> m_pRootSignature;
+	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	Mesh* m_pMesh = nullptr;
 };
 

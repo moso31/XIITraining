@@ -133,6 +133,7 @@
   <ItemGroup>
     <ClCompile Include="App.cpp" />
     <ClCompile Include="D3D.cpp" />
+    <ClCompile Include="header.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Mesh.cpp" />
   </ItemGroup>
@@ -142,6 +143,13 @@
     <ClInclude Include="header.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ShaderStructures.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Color.fx">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</DeploymentContent>
+      <FileType>Document</FileType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</DeploymentContent>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
