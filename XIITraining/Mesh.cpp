@@ -165,8 +165,8 @@ void Mesh::CreateIB()
 void Mesh::Update()
 {
 	static float r = 0.0f;
-	r += 0.001f;
-	m_mxWorld = Matrix::CreateRotationY(r);
+	r += 0.005f;
+	m_mxWorld = Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
 	g_cbObjectData.m_world = m_mxWorld;
 }
 

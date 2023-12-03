@@ -352,7 +352,7 @@ void D3D::CreateShaderAndPSO()
 	D3D12_DEPTH_STENCIL_DESC depthStencilState = {};
 	depthStencilState.DepthEnable = true;
 	depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 	depthStencilState.StencilEnable = false;
 	depthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 	depthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
@@ -379,6 +379,7 @@ void D3D::CreateShaderAndPSO()
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.SampleDesc.Count = 1;
 	psoDesc.SampleDesc.Quality = 0;
+	psoDesc.SampleMask = UINT32_MAX;
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	g_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPipelineState));
@@ -403,7 +404,7 @@ void D3D::Update()
 {
 	// 暂时先使用固定的相机参数
 	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_height / (float)m_width, 0.01f, 1000.0f).Transpose();
+	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 1000.0f).Transpose();
 
 	// World 的部分需要逐 Mesh 更新
 	m_pMesh->Update();
@@ -440,7 +441,7 @@ void D3D::Render()
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::Blue : DirectX::Colors::Blue, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::LightSteelBlue : DirectX::Colors::LightSteelBlue, 0, nullptr);
 	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
@@ -492,13 +493,13 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
-	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
-	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
-
 	// CBV堆 绑定到 cmdList
 	ID3D12DescriptorHeap* ppHeaps[] = { m_pObjectCBVHeap.Get() };
 	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+
+	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
 	// 将 cbv 堆中的 描述符绑定到 cb slot 0.
 	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pObjectCBVHeap->GetGPUDescriptorHandleForHeapStart());

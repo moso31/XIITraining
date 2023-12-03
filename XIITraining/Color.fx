@@ -27,7 +27,7 @@ VertexOut VSMain(VertexIn vin)
 	vout.pos = mul(float4(vin.pos, 1.0f), m_world);
 	vout.pos = mul(vout.pos, m_view);
 	vout.pos = mul(vout.pos, m_proj);
-	vout.pos = float4(vin.pos.xy * 0.2f, 0.2f, 0.3f);
+	//vout.pos = float4(vin.pos.xy * 0.2f, 0.2f, 0.3f);
 	vout.norm = normalize(vin.norm);
 	vout.uv = vin.uv;
 	vout.col = vin.col;
