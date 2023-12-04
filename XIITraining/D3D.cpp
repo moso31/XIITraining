@@ -271,10 +271,10 @@ void D3D::CreateRootSignature()
 	// --根参数0：描述符表
 	// ---描述符0
 	// 每次 Render() 时，调用根签名即可。
-	CD3DX12_ROOT_PARAMETER rootParam[1];
-	CD3DX12_DESCRIPTOR_RANGE cbvTable;
-	cbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0); // 1个CBV，从0号开始
-	rootParam[0].InitAsDescriptorTable(1, &cbvTable); // 1个描述符表，存放在0号槽位
+	CD3DX12_ROOT_PARAMETER rootParam[2];
+	CD3DX12_DESCRIPTOR_RANGE range;
+	range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0); // 1个CBV，从0号开始
+	rootParam[0].InitAsDescriptorTable(1, &range); // 1个描述符表，存放在0号槽位
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(1, rootParam, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
@@ -501,7 +501,6 @@ void D3D::RenderMeshes()
 	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
-	// 将 cbv 堆中的 描述符绑定到 cb slot 0.
 	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pObjectCBVHeap->GetGPUDescriptorHandleForHeapStart());
 
 	m_pMesh->Render();

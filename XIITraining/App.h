@@ -4,7 +4,7 @@
 class App
 {
 public:
-	App() {}
+	App(int w, int h) : m_width(w), m_height(h) {}
 	~App() {}
 
 	void Init();

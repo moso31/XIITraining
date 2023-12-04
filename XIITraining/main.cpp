@@ -36,7 +36,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 	bool x = RegisterClass(&wc);
 
-	RECT rc = { 0, 0, 800, 600 };
+	RECT rc = { 0, 0, 300, 200 };
 	AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, false);
 	int width = rc.right - rc.left;
 	int height = rc.bottom - rc.top;
@@ -46,7 +46,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ShowWindow(g_hWnd, SW_SHOW);
 	UpdateWindow(g_hWnd);
 
-	App* app = new App();
+	App* app = new App(width, height);
 
 	app->Init();
 
