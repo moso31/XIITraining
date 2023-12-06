@@ -228,13 +228,15 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
-void D3D::CreateTexture()
+void D3D::CreateMyTexture()
 {
 	HRESULT hr;
 	TexMetadata metadata;
 	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
 
-	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+	//hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+	hr = LoadFromTGAFile(L"D:\\1.tga", TGA_FLAGS_DEFAULT_SRGB, &metadata, *pImage);
+	//hr = LoadFromDDSFile(L"D:\\NixAssets\\checkboard.dds", DDS_FLAGS_NONE, &metadata, *pImage);
 
 	hr = CreateTextureEx(g_pDevice.Get(), metadata, D3D12_RESOURCE_FLAG_NONE, CREATETEX_DEFAULT, &m_pTexture);
 	m_pTexture->SetName(L"My Texture");
@@ -259,41 +261,79 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
-	// 创建全局常量缓冲区的描述符
+	// 创建全局描述符堆
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 常量缓冲区描述符类型
-	cbvHeapDesc.NumDescriptors = 1; // 按照规划，只有 m_pObjectCBUpload 这一个 cbv
+	cbvHeapDesc.NumDescriptors = 2; // 目前的规划是2个描述符，1：全局MVP矩阵；2：Mesh的纹理的SRV。
 	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // Shader 可见
-	cbvHeapDesc.NodeMask = 0; // 0表示所有节点。节点就是GPU，多GPU的设备可以用这个参数来指定使用哪个GPU
+	cbvHeapDesc.NodeMask = 0; // 0表示所有节点。节点就是GPU，多GPU的设备可以用这个参数来指定使用哪个GPU。
+	g_pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pDescriptorHeapObject));
 
-	g_pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pObjectCBVHeap));
-
-	// 获取全局常量缓冲区的描述符句柄，下面紧接着的创建视图要用
-	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pObjectCBVHeap->GetCPUDescriptorHandleForHeapStart());
+	// 描述符堆的堆头指针
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pDescriptorHeapObject->GetCPUDescriptorHandleForHeapStart());
 
 	// 创建全局常量缓冲区的描述符视图
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
 	cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
+
+	// 创建CBV，并放在 描述符堆 的第1位
 	g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
+
+	// 创建实际应用到Mesh上的纹理资源
+	CreateMyTexture();
+
+	// 创建纹理使用的SRV描述符试图
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 默认的映射
+	srvDesc.Format = m_pTexture->GetDesc().Format; // 纹理的格式
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+
+	// 创建 SRV，并放在 描述符堆 的第2位
+	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
 }
 
 void D3D::CreateRootSignature()
 {
+	// 创建静态采样器
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.ShaderRegister = 0; // HLSL中的寄存器号 = s0
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // 只在像素着色器中可见
+	samplerDesc.RegisterSpace = 0;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 超出纹理坐标的部分，采用环绕方式
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.MipLODBias = 0; // MipLOD偏移
+	samplerDesc.MinLOD = 0.0f; // MipLOD的下界
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX; // MipLOD的上界
+	samplerDesc.MaxAnisotropy = 1; // 各向异性过滤
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 比较函数
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+
+	std::vector<D3D12_STATIC_SAMPLER_DESC> pSamplers = { samplerDesc };
+
 	// 创建根签名。这里的用于渲染Mesh的根签名的结构如下：
 	// -根签名0
 	// --根参数0：描述符表
-	// ---描述符0
+	// ---描述符0：CBV
+	// --根参数1：描述符表
+	// ---描述符0：SRV
 	// 每次 Render() 时，调用根签名即可。
 	CD3DX12_ROOT_PARAMETER rootParam[2];
-	CD3DX12_DESCRIPTOR_RANGE range;
-	range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0); // 1个CBV，从0号开始
-	rootParam[0].InitAsDescriptorTable(1, &range); // 1个描述符表，存放在0号槽位
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(1, rootParam, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	CD3DX12_DESCRIPTOR_RANGE range[2];
+	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, -1); // 1个CBV，从0号开始，使用 space0，从堆的第1位开始读取
+	range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, -1); // 1个SRV，从0号开始，使用 space0，从堆的第2位开始读取
+	rootParam[0].InitAsDescriptorTable(1, &range[0]); 
+	rootParam[1].InitAsDescriptorTable(1, &range[1]); 
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, 1, pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
 	D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
-	g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
+	HRESULT hr;
+	hr = g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
 }
 
 void D3D::CreateShaderAndPSO()
@@ -418,7 +458,7 @@ void D3D::Update()
 {
 	// 暂时先使用固定的相机参数
 	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 1000.0f).Transpose();
+	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 100.0f).Transpose();
 
 	// World 的部分需要逐 Mesh 更新
 	m_pMesh->Update();
@@ -508,14 +548,17 @@ void D3D::FlushCommandQueue()
 void D3D::RenderMeshes()
 {
 	// CBV堆 绑定到 cmdList
-	ID3D12DescriptorHeap* ppHeaps[] = { m_pObjectCBVHeap.Get() };
-	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+
+	ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeapObject.Get() };
+	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
-	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pObjectCBVHeap->GetGPUDescriptorHandleForHeapStart());
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart());
+	g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(1, m_nCBSRUAVDescriptorSize));
 
 	m_pMesh->Render();
 }

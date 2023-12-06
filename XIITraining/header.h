@@ -8,13 +8,13 @@
 
 #include <vector>
 
-#include "DirectXTex/DirectXTex.h"
-
 #include "ShaderStructures.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3dcompiler.lib")
+
+#include "DirectXTex/DirectXTex.h"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;

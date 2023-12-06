@@ -20,6 +20,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+	AllocConsole();
+	FILE* fp = 0;
+	freopen_s(&fp, "CONOUT$", "w", stdout);
+
 #if defined(DEBUG) || defined(_DEBUG)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
@@ -36,7 +40,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 	bool x = RegisterClass(&wc);
 
-	RECT rc = { 0, 0, 300, 200 };
+	RECT rc = { 0, 0, 800, 600 };
 	AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, false);
 	int width = rc.right - rc.left;
 	int height = rc.bottom - rc.top;

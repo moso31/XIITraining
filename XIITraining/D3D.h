@@ -34,7 +34,7 @@ private:
 	void CreateSwapChain();
 	void CreateDescriptorHeap();
 
-	void CreateTexture();
+	void CreateMyTexture();
 
 	void CreateGlobalConstantBuffers();
 	void CreateRootSignature();
@@ -53,7 +53,7 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_pDSVHeap;
 
 	// pObjectCB全局常量缓冲区使用的描述符堆
-	ComPtr<ID3D12DescriptorHeap> m_pObjectCBVHeap;
+	ComPtr<ID3D12DescriptorHeap> m_pDescriptorHeapObject;
 
 	int m_width = 0;
 	int m_height = 0;
