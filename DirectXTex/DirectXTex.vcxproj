@@ -18,11 +18,47 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BC.h" />
+    <ClInclude Include="BCDirectCompute.h" />
+    <ClInclude Include="d3dx12.h" />
+    <ClInclude Include="DDS.h" />
+    <ClInclude Include="DirectXTex.h" />
+    <ClInclude Include="DirectXTexP.h" />
+    <ClInclude Include="filters.h" />
+    <ClInclude Include="scoped.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DirectXTex.inl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="BC.cpp" />
+    <ClCompile Include="BC4BC5.cpp" />
+    <ClCompile Include="BC6HBC7.cpp" />
+    <ClCompile Include="BCDirectCompute.cpp" />
+    <ClCompile Include="DirectXTexCompress.cpp" />
+    <ClCompile Include="DirectXTexCompressGPU.cpp" />
+    <ClCompile Include="DirectXTexConvert.cpp" />
+    <ClCompile Include="DirectXTexD3D11.cpp" />
+    <ClCompile Include="DirectXTexD3D12.cpp" />
+    <ClCompile Include="DirectXTexDDS.cpp" />
+    <ClCompile Include="DirectXTexFlipRotate.cpp" />
+    <ClCompile Include="DirectXTexHDR.cpp" />
+    <ClCompile Include="DirectXTexImage.cpp" />
+    <ClCompile Include="DirectXTexMipmaps.cpp" />
+    <ClCompile Include="DirectXTexMisc.cpp" />
+    <ClCompile Include="DirectXTexNormalMaps.cpp" />
+    <ClCompile Include="DirectXTexPMAlpha.cpp" />
+    <ClCompile Include="DirectXTexResize.cpp" />
+    <ClCompile Include="DirectXTexTGA.cpp" />
+    <ClCompile Include="DirectXTexUtil.cpp" />
+    <ClCompile Include="DirectXTexWIC.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{8259e2d9-e8a4-4f76-8540-8141be8ae711}</ProjectGuid>
-    <RootNamespace>XIITraining</RootNamespace>
+    <ProjectGuid>{560ed954-a479-421c-8f63-3e9e8d5d09c3}</ProjectGuid>
+    <RootNamespace>DirectXTex</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -40,13 +76,13 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -104,13 +140,11 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>./DXCommon/;./DXMath/</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>.\;.\Shaders\Compiled;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>.\libs\;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -121,38 +155,15 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>./DXCommon/;./DXMath/</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>.\;.\Shaders\Compiled;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>.\libs\;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="App.cpp" />
-    <ClCompile Include="D3D.cpp" />
-    <ClCompile Include="header.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="Mesh.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="App.h" />
-    <ClInclude Include="D3D.h" />
-    <ClInclude Include="header.h" />
-    <ClInclude Include="Mesh.h" />
-    <ClInclude Include="ShaderStructures.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Color.fx">
-      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</DeploymentContent>
-      <FileType>Document</FileType>
-      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</DeploymentContent>
-    </None>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

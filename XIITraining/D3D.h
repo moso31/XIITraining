@@ -34,6 +34,8 @@ private:
 	void CreateSwapChain();
 	void CreateDescriptorHeap();
 
+	void CreateTexture();
+
 	void CreateGlobalConstantBuffers();
 	void CreateRootSignature();
 	void CreateShaderAndPSO();
@@ -75,5 +77,7 @@ private:
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	Mesh* m_pMesh = nullptr;
+
+	ComPtr<ID3D12Resource> m_pTexture;
 };
 

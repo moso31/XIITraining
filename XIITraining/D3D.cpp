@@ -228,6 +228,20 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
+void D3D::CreateTexture()
+{
+	HRESULT hr;
+	TexMetadata metadata;
+	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
+
+	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+
+	hr = CreateTextureEx(g_pDevice.Get(), metadata, D3D12_RESOURCE_FLAG_NONE, CREATETEX_DEFAULT, &m_pTexture);
+	m_pTexture->SetName(L"My Texture");
+
+	pImage.reset();
+}
+
 void D3D::CreateGlobalConstantBuffers()
 {
 	// 创建全局常量缓冲区，存储MVP矩阵
