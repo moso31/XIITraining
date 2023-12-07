@@ -370,17 +370,15 @@ void D3D::CreateRootSignature()
 
 	// 创建根签名。这里的用于渲染Mesh的根签名的结构如下：
 	// -根签名0
-	// --根参数0：描述符表
+	// --根参数0：描述符表(size = 2)
 	// ---描述符0：CBV
-	// --根参数1：描述符表
-	// ---描述符0：SRV
+	// ---描述符1：SRV
 	// 每次 Render() 时，调用根签名即可。
-	CD3DX12_ROOT_PARAMETER rootParam[2];
+	CD3DX12_ROOT_PARAMETER rootParam[1];
 	CD3DX12_DESCRIPTOR_RANGE range[2];
-	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, -1); // 1个CBV，从0号开始，使用 space0，从堆的第1位开始读取
-	range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, -1); // 1个SRV，从0号开始，使用 space0，从堆的第2位开始读取
-	rootParam[0].InitAsDescriptorTable(1, &range[0]); 
-	rootParam[1].InitAsDescriptorTable(1, &range[1]); 
+	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，从0号开始，使用 space0，从堆的第0位开始读取
+	range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1); // 1个SRV，从0号开始，使用 space0，从堆的第1位开始读取
+	rootParam[0].InitAsDescriptorTable(2, range); 
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, 1, pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
@@ -611,7 +609,6 @@ void D3D::RenderMeshes()
 
 	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart());
 	g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(1, m_nCBSRUAVDescriptorSize));
 
 	m_pMesh->Render();
 }
