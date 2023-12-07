@@ -40,5 +40,5 @@ VertexOut VSMain(VertexIn vin)
 float4 PSMain(VertexOut pin) : SV_TARGET
 {
 	float4 tex = txAlbedo.Sample(ssLinear, pin.uv);
-	return pin.col * tex;
+	return tex;
 }

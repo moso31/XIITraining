@@ -79,5 +79,6 @@ private:
 	Mesh* m_pMesh = nullptr;
 
 	ComPtr<ID3D12Resource> m_pTexture;
+	ComPtr<ID3D12Resource> m_pTextureUpload;
 };
 

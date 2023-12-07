@@ -234,11 +234,62 @@ void D3D::CreateMyTexture()
 	TexMetadata metadata;
 	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
 
-	//hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
-	hr = LoadFromTGAFile(L"D:\\1.tga", TGA_FLAGS_DEFAULT_SRGB, &metadata, *pImage);
-	//hr = LoadFromDDSFile(L"D:\\NixAssets\\checkboard.dds", DDS_FLAGS_NONE, &metadata, *pImage);
+	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
 
-	hr = CreateTextureEx(g_pDevice.Get(), metadata, D3D12_RESOURCE_FLAG_NONE, CREATETEX_DEFAULT, &m_pTexture);
+	// Create the texture.
+	{
+		// Describe and create a Texture2D.
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Width = static_cast<UINT>(metadata.width);
+		desc.Height = static_cast<UINT>(metadata.height);
+		desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
+		desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
+			? static_cast<UINT16>(metadata.depth)
+			: static_cast<UINT16>(metadata.arraySize);
+		desc.Format = metadata.format;
+		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		desc.SampleDesc.Count = 1;
+		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
+
+		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+		g_pDevice->CreateCommittedResource(
+			&defaultHeap,
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&m_pTexture));
+
+		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, 1);
+		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+		// Create the GPU upload buffer.
+		g_pDevice->CreateCommittedResource(
+			&uploadHeap,
+			D3D12_HEAP_FLAG_NONE,
+			&uploadBuffer,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_pTextureUpload));
+		m_pTextureUpload->SetName(L"textureUploadHeap temp");
+
+		// Copy data to the intermediate upload heap and then schedule a copy 
+		// from the upload heap to the Texture2D.
+
+		int pixelSize = pImage->GetPixelsSize() / metadata.width / metadata.height / metadata.depth;
+		D3D12_SUBRESOURCE_DATA textureData = {};
+		textureData.pData = pImage->GetPixels();
+		textureData.RowPitch = metadata.width * pixelSize;
+		textureData.SlicePitch = textureData.RowPitch * metadata.height;
+
+		UpdateSubresources(g_pCommandList.Get(), m_pTexture.Get(), m_pTextureUpload.Get(), 0, 0, 1, &textureData);
+
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		g_pCommandList->ResourceBarrier(1, &barrier);
+	}
+
+	//hr = CreateTextureEx(g_pDevice.Get(), metadata, D3D12_RESOURCE_FLAG_NONE, CREATETEX_DEFAULT, &m_pTexture);
 	m_pTexture->SetName(L"My Texture");
 
 	pImage.reset();
@@ -290,6 +341,8 @@ void D3D::CreateGlobalConstantBuffers()
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.0;
+	srvDesc.Texture2D.PlaneSlice = 0;
 
 	// 创建 SRV，并放在 描述符堆 的第2位
 	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));

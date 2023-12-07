@@ -1,18 +1,13 @@
 #pragma once
-#include <d3d12.h>
+#include <d3dx12.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
 #include <DirectXColors.h>
 #include <d3dcompiler.h>
-#include <d3dx12.h>
 
 #include <vector>
 
 #include "ShaderStructures.h"
-
-#pragma comment(lib, "d3d12.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "d3dcompiler.lib")
 
 #include "DirectXTex/DirectXTex.h"
 
