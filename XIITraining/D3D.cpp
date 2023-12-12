@@ -312,6 +312,10 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	// 创建全局描述符堆
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 常量缓冲区描述符类型
@@ -492,7 +496,7 @@ void D3D::CreateShaderAndPSO()
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
 {
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, 0);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
@@ -566,7 +570,7 @@ void D3D::Render()
 	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
-	m_pSwapChain->Present(0, 0);
+	m_pSwapChain->Present(4, 0);
 
 	FlushCommandQueue();
 }
