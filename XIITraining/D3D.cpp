@@ -234,7 +234,8 @@ void D3D::CreateMyTexture()
 	TexMetadata metadata;
 	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
 
-	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+	//hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+	hr = LoadFromDDSFile(L"D:\\NixAssets\\rustediron2\\0.dds", DDS_FLAGS_NONE, &metadata, *pImage);
 
 	// Create the texture.
 	{
@@ -262,7 +263,7 @@ void D3D::CreateMyTexture()
 			nullptr,
 			IID_PPV_ARGS(&m_pTexture));
 
-		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, 1);
+		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, desc.MipLevels);
 		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 		// Create the GPU upload buffer.
 		g_pDevice->CreateCommittedResource(
@@ -274,16 +275,37 @@ void D3D::CreateMyTexture()
 			IID_PPV_ARGS(&m_pTextureUpload));
 		m_pTextureUpload->SetName(L"textureUploadHeap temp");
 
-		// Copy data to the intermediate upload heap and then schedule a copy 
-		// from the upload heap to the Texture2D.
+		auto texDesc = m_pTexture->GetDesc();
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[texDesc.MipLevels];
+		UINT* numRow = new UINT[texDesc.MipLevels];
+		UINT64* numRowSizeInBytes = new UINT64[texDesc.MipLevels];
+		size_t totalBytes;
+		g_pDevice->GetCopyableFootprints(&texDesc, 0, texDesc.MipLevels, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
 
-		int pixelSize = pImage->GetPixelsSize() / metadata.width / metadata.height / metadata.depth;
-		D3D12_SUBRESOURCE_DATA textureData = {};
-		textureData.pData = pImage->GetPixels();
-		textureData.RowPitch = metadata.width * pixelSize;
-		textureData.SlicePitch = textureData.RowPitch * metadata.height;
+		void* mappedData;
+		m_pTextureUpload->Map(0, nullptr, &mappedData);
 
-		UpdateSubresources(g_pCommandList.Get(), m_pTexture.Get(), m_pTextureUpload.Get(), 0, 0, 1, &textureData);
+		for (UINT mip = 0; mip < texDesc.MipLevels; mip++)
+		{
+			const Image* pImg = pImage->GetImage(mip, 0, 0);
+			const BYTE* pSrcData = pImg->pixels; 
+			BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[mip].Offset;
+
+			for (UINT y = 0; y < numRow[mip]; y++)
+			{
+				memcpy(pDstData + layouts[mip].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[mip]);
+			}
+		}
+
+		m_pTextureUpload->Unmap(0, nullptr);
+
+		for (UINT mip = 0; mip < texDesc.MipLevels; ++mip) {
+			CD3DX12_TEXTURE_COPY_LOCATION dst(m_pTexture.Get(), mip); // 目标纹理的mip级别
+			CD3DX12_TEXTURE_COPY_LOCATION src(m_pTextureUpload.Get(), layouts[mip]); // 上传堆的mip级别
+
+			// 指定目标mip级别的x, y, z偏移量，通常为0
+			g_pCommandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+		}
 
 		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		g_pCommandList->ResourceBarrier(1, &barrier);
@@ -343,7 +365,7 @@ void D3D::CreateGlobalConstantBuffers()
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 默认的映射
 	srvDesc.Format = m_pTexture->GetDesc().Format; // 纹理的格式
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MipLevels = m_pTexture->GetDesc().MipLevels;
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0;
 	srvDesc.Texture2D.PlaneSlice = 0;
@@ -496,7 +518,7 @@ void D3D::CreateShaderAndPSO()
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
 {
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, 0);
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
@@ -570,7 +592,7 @@ void D3D::Render()
 	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
-	m_pSwapChain->Present(4, 0);
+	m_pSwapChain->Present(0, 0);
 
 	FlushCommandQueue();
 }
