@@ -17,8 +17,7 @@ public:
 
 	void Init();
 
-	void Update();
-	void Render();
+	void Draw();
 
 	void FlushCommandQueue();
 
@@ -35,6 +34,7 @@ private:
 	void CreateDescriptorHeap();
 
 	void CreateMyTexture();
+	void CreateCubeMap();
 
 	void CreateGlobalConstantBuffers();
 	void CreateRootSignature();
@@ -77,8 +77,12 @@ private:
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	Mesh* m_pMesh = nullptr;
+	Mesh* m_pMeshCube = nullptr;
 
 	ComPtr<ID3D12Resource> m_pTexture;
 	ComPtr<ID3D12Resource> m_pTextureUpload;
+
+	ComPtr<ID3D12Resource> m_pCubeMap;
+	ComPtr<ID3D12Resource> m_pCubeMapUpload;
 };
 

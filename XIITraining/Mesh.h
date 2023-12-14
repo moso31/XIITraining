@@ -9,6 +9,9 @@ public:
 	void Update();
 	void Render();
 
+	void SetScale(float x, float y, float z);
+	void SetRotate(bool val) { m_rotate = val; }
+
 private:
 	void CreateVB();
 	void CreateIB();
@@ -22,6 +25,7 @@ private:
 	ComPtr<ID3D12Resource> m_pVBUpload;
 	ComPtr<ID3D12Resource> m_pIBUpload;
 
-	Matrix m_mxWorld;
+	bool m_rotate;
+	Vector3 m_scale;
 };
 

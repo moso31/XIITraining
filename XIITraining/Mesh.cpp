@@ -162,12 +162,20 @@ void Mesh::CreateIB()
 	g_pCommandList->ResourceBarrier(1, &barrier);
 }
 
+void Mesh::SetScale(float x, float y, float z)
+{
+	m_scale = { x, y, z };
+}
+
 void Mesh::Update()
 {
 	static float r = 0.0f;
-	r += 0.0025f;
-	m_mxWorld = Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
-	g_cbObjectData.m_world = m_mxWorld;
+	r += 0.025;
+
+	Matrix mx = Matrix::CreateScale(m_scale);
+	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
+
+	g_cbObjectData.m_world = mx;
 }
 
 void Mesh::Render()

@@ -61,12 +61,28 @@ void D3D::Init()
 	// 创建描述符堆
 	CreateDescriptorHeap();
 
+	// 创建实际应用到Mesh上的纹理资源
+	CreateMyTexture();
+	CreateCubeMap();
+
 	CreateGlobalConstantBuffers();
 
 	CreateShaderAndPSO();
 
 	m_pMesh = new Mesh();
 	m_pMesh->InitBox();
+	m_pMesh->SetScale(1.0f, 1.0f, 1.0f);
+	m_pMesh->SetRotate(true);
+
+	m_pMeshCube = new Mesh();
+	m_pMeshCube->InitBox();
+	m_pMeshCube->SetScale(100.0f, 100.0f, 100.0f);
+	//m_pMeshCube->SetScale(0.1f, 0.1f, 0.1f);
+	m_pMeshCube->SetRotate(false);
+
+	// 暂时先使用固定的相机参数
+	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 	
 	// 初始化流程结束后，默认关闭命令列表
 	// 虽然并非官方规定，但这是一个常见实践做法。
@@ -234,8 +250,8 @@ void D3D::CreateMyTexture()
 	TexMetadata metadata;
 	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
 
-	//hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
-	hr = LoadFromDDSFile(L"D:\\NixAssets\\rustediron2\\0.dds", DDS_FLAGS_NONE, &metadata, *pImage);
+	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
+	//hr = LoadFromDDSFile(L"D:\\NixAssets\\dx12\\out\\1.dds", DDS_FLAGS_NONE, &metadata, *pImage);
 
 	// Create the texture.
 	{
@@ -263,7 +279,7 @@ void D3D::CreateMyTexture()
 			nullptr,
 			IID_PPV_ARGS(&m_pTexture));
 
-		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, desc.MipLevels);
+		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, desc.DepthOrArraySize * desc.MipLevels);
 		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 		// Create the GPU upload buffer.
 		g_pDevice->CreateCommittedResource(
@@ -311,8 +327,99 @@ void D3D::CreateMyTexture()
 		g_pCommandList->ResourceBarrier(1, &barrier);
 	}
 
-	//hr = CreateTextureEx(g_pDevice.Get(), metadata, D3D12_RESOURCE_FLAG_NONE, CREATETEX_DEFAULT, &m_pTexture);
 	m_pTexture->SetName(L"My Texture");
+
+	pImage.reset();
+}
+
+void D3D::CreateCubeMap()
+{
+	HRESULT hr;
+	TexMetadata metadata;
+	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
+
+	hr = LoadFromDDSFile(L"D:\\NixAssets\\HDR\\ballroom_128_Mip.dds", DDS_FLAGS_NONE, &metadata, *pImage);
+
+	// Create the texture.
+	{
+		// Describe and create a Texture2D.
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Width = static_cast<UINT>(metadata.width);
+		desc.Height = static_cast<UINT>(metadata.height);
+		desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
+		desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
+			? static_cast<UINT16>(metadata.depth)
+			: static_cast<UINT16>(metadata.arraySize);
+		desc.Format = metadata.format;
+		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		desc.SampleDesc.Count = 1;
+		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
+
+		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+		g_pDevice->CreateCommittedResource(
+			&defaultHeap,
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&m_pCubeMap));
+
+		UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
+
+		auto texDesc = m_pCubeMap->GetDesc();
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
+		UINT* numRow = new UINT[layoutSize];
+		UINT64* numRowSizeInBytes = new UINT64[layoutSize];
+		size_t totalBytes;
+		g_pDevice->GetCopyableFootprints(&texDesc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
+		
+		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(totalBytes);
+		// Create the GPU upload buffer.
+		g_pDevice->CreateCommittedResource(
+			&uploadHeap,
+			D3D12_HEAP_FLAG_NONE,
+			&uploadBuffer,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_pCubeMapUpload));
+		m_pCubeMapUpload->SetName(L"textureUploadHeap temp");
+
+		void* mappedData;
+		m_pCubeMapUpload->Map(0, nullptr, &mappedData);
+
+		for (UINT face = 0; face < texDesc.DepthOrArraySize; face++)
+		{
+			for (UINT mip = 0; mip < texDesc.MipLevels; mip++)
+			{
+				const Image* pImg = pImage->GetImage(mip, face, 0);
+				const BYTE* pSrcData = pImg->pixels;
+				BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[mip].Offset;
+
+				for (UINT y = 0; y < numRow[mip]; y++)
+				{
+					memcpy(pDstData + layouts[mip].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[mip]);
+				}
+			}
+		}
+
+		m_pCubeMapUpload->Unmap(0, nullptr);
+
+		for (UINT l = 0; l < layoutSize; l++)
+		{
+			CD3DX12_TEXTURE_COPY_LOCATION dst(m_pCubeMap.Get(), l); // 目标纹理的mip级别
+			CD3DX12_TEXTURE_COPY_LOCATION src(m_pCubeMapUpload.Get(), layouts[l]); // 上传堆的mip级别
+
+			// 指定目标mip级别的x, y, z偏移量，通常为0
+			g_pCommandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+		}
+
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pCubeMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		g_pCommandList->ResourceBarrier(1, &barrier);
+	}
+
+	m_pCubeMap->SetName(L"My Cube");
 
 	pImage.reset();
 }
@@ -323,7 +430,7 @@ void D3D::CreateGlobalConstantBuffers()
 	// 对这种每帧都需要更新的，准备一个上传堆就够了，不需要准备默认堆。默认堆是给静态的玩意（比如Mesh的纹理，VBIB）使用的
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 
-	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)));
+	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)) * 2);
 	g_pDevice->CreateCommittedResource(
 		&uploadHeapProp,
 		D3D12_HEAP_FLAG_NONE,
@@ -334,31 +441,17 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// 创建全局描述符堆
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 常量缓冲区描述符类型
-	cbvHeapDesc.NumDescriptors = 2; // 目前的规划是2个描述符，1：全局MVP矩阵；2：Mesh的纹理的SRV。
+	cbvHeapDesc.NumDescriptors = 4; // 目前的规划是；1：Mesh的纹理的SRV；2: CubeMap的纹理的SRV；3-n：Mesh 1-(n-2)的全局MVP矩阵的View。
 	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // Shader 可见
 	cbvHeapDesc.NodeMask = 0; // 0表示所有节点。节点就是GPU，多GPU的设备可以用这个参数来指定使用哪个GPU。
 	g_pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pDescriptorHeapObject));
 
 	// 描述符堆的堆头指针
 	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pDescriptorHeapObject->GetCPUDescriptorHandleForHeapStart());
-
-	// 创建全局常量缓冲区的描述符视图
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
-	cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
-
-	// 创建CBV，并放在 描述符堆 的第1位
-	g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
-
-	// 创建实际应用到Mesh上的纹理资源
-	CreateMyTexture();
 
 	// 创建纹理使用的SRV描述符试图
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -370,8 +463,31 @@ void D3D::CreateGlobalConstantBuffers()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0;
 	srvDesc.Texture2D.PlaneSlice = 0;
 
+	// 创建 SRV，并放在 描述符堆 的第1位
+	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, cbvHandle);
+
+	// 创建CubeMap使用的SRV描述符试图
+	D3D12_SHADER_RESOURCE_VIEW_DESC cubeSrvDesc = {};
+	cubeSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 默认的映射
+	cubeSrvDesc.Format = m_pCubeMap->GetDesc().Format; // 纹理的格式
+	cubeSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+	cubeSrvDesc.TextureCube.MipLevels = m_pCubeMap->GetDesc().MipLevels;
+	cubeSrvDesc.TextureCube.MostDetailedMip = 0;
+	cubeSrvDesc.TextureCube.ResourceMinLODClamp = 0.0;
+
 	// 创建 SRV，并放在 描述符堆 的第2位
-	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+	g_pDevice->CreateShaderResourceView(m_pCubeMap.Get(), &cubeSrvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+
+	{
+		// 创建CBV，并放在 描述符堆 的第3、4位
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
+		cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
+		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+
+		cbvDesc.BufferLocation += cbvDesc.SizeInBytes; // 偏移一位
+		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+	}
 }
 
 void D3D::CreateRootSignature()
@@ -394,22 +510,22 @@ void D3D::CreateRootSignature()
 
 	std::vector<D3D12_STATIC_SAMPLER_DESC> pSamplers = { samplerDesc };
 
-	// 创建根签名。这里的用于渲染Mesh的根签名的结构如下：
-	// -根签名0
-	// --根参数0：描述符表(size = 2)
-	// ---描述符0：CBV
-	// ---描述符1：SRV
-	// 每次 Render() 时，调用根签名即可。
-	CD3DX12_ROOT_PARAMETER rootParam[1];
-	CD3DX12_DESCRIPTOR_RANGE range[2];
-	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，从0号开始，使用 space0，从堆的第0位开始读取
-	range[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1); // 1个SRV，从0号开始，使用 space0，从堆的第1位开始读取
-	rootParam[0].InitAsDescriptorTable(2, range); 
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, 1, pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	CD3DX12_ROOT_PARAMETER rootParam[2];
+	{
+		CD3DX12_DESCRIPTOR_RANGE range[1];
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, 0); // 1个SRV，slot 0~1，space0，从堆的第0位开始读取
+		rootParam[0].InitAsDescriptorTable(_countof(range), range);
+	}
+	{
+		CD3DX12_DESCRIPTOR_RANGE range[1];
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，slot 0，space0，从堆的第2位开始读取
+		rootParam[1].InitAsDescriptorTable(_countof(range), range);
+	}
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
-	D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
 	HRESULT hr;
+	hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
 	hr = g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
 }
 
@@ -483,7 +599,7 @@ void D3D::CreateShaderAndPSO()
 	D3D12_DEPTH_STENCIL_DESC depthStencilState = {};
 	depthStencilState.DepthEnable = true;
 	depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	depthStencilState.StencilEnable = false;
 	depthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 	depthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
@@ -531,23 +647,7 @@ ID3D12Resource* D3D::GetSwapChainBackBuffer() const
 	return m_pSwapChainRT[m_pSwapChain->GetCurrentBackBufferIndex()].Get();
 }
 
-void D3D::Update()
-{
-	// 暂时先使用固定的相机参数
-	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 100.0f).Transpose();
-
-	// World 的部分需要逐 Mesh 更新
-	m_pMesh->Update();
-
-	// 更新全局常量缓冲区，类似 DX11 中的 UpdateSubresource
-	MeshTransformData* pTransformData;
-	m_pObjectCBUpload->Map(0, nullptr, (void**)&pTransformData);
-	*pTransformData = g_cbObjectData;
-	m_pObjectCBUpload->Unmap(0, nullptr);
-}
-
-void D3D::Render()
+void D3D::Draw()
 {
 	HRESULT hr;
 	hr = g_pCommandAllocator->Reset();
@@ -572,7 +672,7 @@ void D3D::Render()
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ?  DirectX::Colors::LightSteelBlue : DirectX::Colors::LightSteelBlue, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ? DirectX::Colors::LightSteelBlue : DirectX::Colors::LightSteelBlue, 0, nullptr);
 	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
@@ -624,7 +724,6 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
-	// CBV堆 绑定到 cmdList
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
 	ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeapObject.Get() };
@@ -633,10 +732,26 @@ void D3D::RenderMeshes()
 	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
-	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart());
-	g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart());
 
+	// World 的部分需要逐 Mesh 更新
+	void* pTransformData;
+	m_pObjectCBUpload->Map(0, nullptr, (void**)&pTransformData);
+
+	m_pMesh->Update();
+	memcpy(pTransformData, &g_cbObjectData, sizeof(MeshTransformData));
+
+	m_pMeshCube->Update();
+	memcpy(reinterpret_cast<char*>(pTransformData) + D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)), &g_cbObjectData, sizeof(MeshTransformData));
+
+	m_pObjectCBUpload->Unmap(0, nullptr);
+
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart(), 0, m_nCBSRUAVDescriptorSize);
+	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(2, m_nCBSRUAVDescriptorSize));
 	m_pMesh->Render();
+
+	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+	m_pMeshCube->Render();
 }
 
 void D3D::Release()

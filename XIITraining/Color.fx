@@ -6,6 +6,7 @@ cbuffer cbObject : register(b0)
 };
 
 Texture2D txAlbedo : register(t0);
+TextureCube txCube : register(t1);
 SamplerState ssLinear : register(s0);
 
 struct VertexIn
