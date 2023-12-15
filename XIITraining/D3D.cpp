@@ -78,7 +78,7 @@ void D3D::Init()
 	m_pMeshCube->InitBox();
 	m_pMeshCube->SetScale(100.0f, 100.0f, 100.0f);
 	//m_pMeshCube->SetScale(0.1f, 0.1f, 0.1f);
-	m_pMeshCube->SetRotate(false);
+	m_pMeshCube->SetRotate(true);
 
 	// 暂时先使用固定的相机参数
 	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
@@ -389,17 +389,17 @@ void D3D::CreateCubeMap()
 		void* mappedData;
 		m_pCubeMapUpload->Map(0, nullptr, &mappedData);
 
-		for (UINT face = 0; face < texDesc.DepthOrArraySize; face++)
+		for (UINT face = 0, index = 0; face < texDesc.DepthOrArraySize; face++)
 		{
-			for (UINT mip = 0; mip < texDesc.MipLevels; mip++)
+			for (UINT mip = 0; mip < texDesc.MipLevels; mip++, index++)
 			{
 				const Image* pImg = pImage->GetImage(mip, face, 0);
 				const BYTE* pSrcData = pImg->pixels;
-				BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[mip].Offset;
+				BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[index].Offset;
 
-				for (UINT y = 0; y < numRow[mip]; y++)
+				for (UINT y = 0; y < numRow[index]; y++)
 				{
-					memcpy(pDstData + layouts[mip].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[mip]);
+					memcpy(pDstData + layouts[index].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[index]);
 				}
 			}
 		}
