@@ -40,10 +40,11 @@ VertexOut VSMain(VertexIn vin)
 	return vout;
 }
 
+
 float4 PSMain(VertexOut pin) : SV_TARGET
 {
 	float4 tex = txAlbedo.SampleLevel(ssLinear, pin.uv, 8.0);
-	if (length(m_world._11) > 50.0f)
+	if (length(m_world._22) > 10.0f)
 		tex = txCube.SampleLevel(ssLinear, pin.inPos.xyz, 0.0);
 	//if (pin.uv.x > 0.5)
 	{
