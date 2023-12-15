@@ -20,6 +20,7 @@ struct VertexIn
 struct VertexOut
 {
 	float4 pos : SV_POSITION;
+	float3 inPos : POSITION0;
 	float3 norm : NORMAL;
 	float2 uv : TEXCOORD;
 	float4 col : COLOR;
@@ -32,6 +33,7 @@ VertexOut VSMain(VertexIn vin)
 	vout.pos = mul(vout.pos, m_view);
 	vout.pos = mul(vout.pos, m_proj);
 	//vout.pos = float4(vin.pos.xy * 0.2f, 0.2f, 0.3f);
+	vout.inPos = vin.pos;
 	vout.norm = normalize(vin.norm);
 	vout.uv = vin.uv;
 	vout.col = vin.col;
@@ -41,6 +43,8 @@ VertexOut VSMain(VertexIn vin)
 float4 PSMain(VertexOut pin) : SV_TARGET
 {
 	float4 tex = txAlbedo.SampleLevel(ssLinear, pin.uv, 8.0);
+	if (length(m_world._11) > 50.0f)
+		tex = txCube.SampleLevel(ssLinear, pin.inPos.xyz, 0.0);
 	//if (pin.uv.x > 0.5)
 	{
 		//tex = txAlbedo.Sample(ssLinear, pin.uv);
