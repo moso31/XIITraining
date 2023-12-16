@@ -170,7 +170,7 @@ void Mesh::SetScale(float x, float y, float z)
 void Mesh::Update()
 {
 	static float r = 0.0f;
-	r += 0.025;
+	r += 0.0025;
 
 	Matrix mx = Matrix::CreateScale(m_scale);
 	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);

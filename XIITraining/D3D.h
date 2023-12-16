@@ -35,6 +35,7 @@ private:
 
 	void CreateMyTexture();
 	void CreateCubeMap();
+	void CreateTextureInternal(const std::filesystem::path& path, const std::wstring& resName, ComPtr<ID3D12Resource>& pRes, ComPtr<ID3D12Resource>& pResUpload);
 
 	void CreateGlobalConstantBuffers();
 	void CreateRootSignature();

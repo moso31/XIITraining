@@ -246,99 +246,30 @@ void D3D::CreateDescriptorHeap()
 
 void D3D::CreateMyTexture()
 {
-	HRESULT hr;
-	TexMetadata metadata;
-	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
-
-	hr = LoadFromWICFile(L"D:\\NixAssets\\hex-stones1\\albedo.png", WIC_FLAGS_NONE, &metadata, *pImage);
-	//hr = LoadFromDDSFile(L"D:\\NixAssets\\dx12\\out\\1.dds", DDS_FLAGS_NONE, &metadata, *pImage);
-
-	// Create the texture.
-	{
-		// Describe and create a Texture2D.
-		D3D12_RESOURCE_DESC desc = {};
-		desc.Width = static_cast<UINT>(metadata.width);
-		desc.Height = static_cast<UINT>(metadata.height);
-		desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
-		desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
-			? static_cast<UINT16>(metadata.depth)
-			: static_cast<UINT16>(metadata.arraySize);
-		desc.Format = metadata.format;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.SampleDesc.Count = 1;
-		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
-
-		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-
-		g_pDevice->CreateCommittedResource(
-			&defaultHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&m_pTexture));
-
-		const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_pTexture.Get(), 0, desc.DepthOrArraySize * desc.MipLevels);
-		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
-		// Create the GPU upload buffer.
-		g_pDevice->CreateCommittedResource(
-			&uploadHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&uploadBuffer,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&m_pTextureUpload));
-		m_pTextureUpload->SetName(L"textureUploadHeap temp");
-
-		auto texDesc = m_pTexture->GetDesc();
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[texDesc.MipLevels];
-		UINT* numRow = new UINT[texDesc.MipLevels];
-		UINT64* numRowSizeInBytes = new UINT64[texDesc.MipLevels];
-		size_t totalBytes;
-		g_pDevice->GetCopyableFootprints(&texDesc, 0, texDesc.MipLevels, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
-
-		void* mappedData;
-		m_pTextureUpload->Map(0, nullptr, &mappedData);
-
-		for (UINT mip = 0; mip < texDesc.MipLevels; mip++)
-		{
-			const Image* pImg = pImage->GetImage(mip, 0, 0);
-			const BYTE* pSrcData = pImg->pixels; 
-			BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[mip].Offset;
-
-			for (UINT y = 0; y < numRow[mip]; y++)
-			{
-				memcpy(pDstData + layouts[mip].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[mip]);
-			}
-		}
-
-		m_pTextureUpload->Unmap(0, nullptr);
-
-		for (UINT mip = 0; mip < texDesc.MipLevels; ++mip) {
-			CD3DX12_TEXTURE_COPY_LOCATION dst(m_pTexture.Get(), mip); // 目标纹理的mip级别
-			CD3DX12_TEXTURE_COPY_LOCATION src(m_pTextureUpload.Get(), layouts[mip]); // 上传堆的mip级别
-
-			// 指定目标mip级别的x, y, z偏移量，通常为0
-			g_pCommandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-		}
-
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		g_pCommandList->ResourceBarrier(1, &barrier);
-	}
-
-	m_pTexture->SetName(L"My Texture");
-
-	pImage.reset();
+	CreateTextureInternal("D:\\NixAssets\\rustediron2\\albedo.dds", L"My Cube", m_pTexture, m_pTextureUpload);
 }
 
 void D3D::CreateCubeMap()
+{
+	CreateTextureInternal("D:\\NixAssets\\HDR\\ballroom_128_Mip.dds", L"My Cube", m_pCubeMap, m_pCubeMapUpload);
+}
+
+void D3D::CreateTextureInternal(const std::filesystem::path& path, const std::wstring& resName, ComPtr<ID3D12Resource>& pRes, ComPtr<ID3D12Resource>& pResUpload)
 {
 	HRESULT hr;
 	TexMetadata metadata;
 	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
 
-	hr = LoadFromDDSFile(L"D:\\NixAssets\\HDR\\ballroom_128_Mip.dds", DDS_FLAGS_NONE, &metadata, *pImage);
+	std::string strExt = path.extension().string();
+	if (strExt == ".dds")
+	{
+		hr = LoadFromDDSFile(path.wstring().c_str(), DDS_FLAGS_NONE, &metadata, *pImage);
+	}
+	else
+	{
+		pImage.reset();
+		return;
+	}
 
 	// Create the texture.
 	{
@@ -364,17 +295,17 @@ void D3D::CreateCubeMap()
 			&desc,
 			D3D12_RESOURCE_STATE_COPY_DEST,
 			nullptr,
-			IID_PPV_ARGS(&m_pCubeMap));
+			IID_PPV_ARGS(&pRes));
 
 		UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
 
-		auto texDesc = m_pCubeMap->GetDesc();
+		auto texDesc = pRes->GetDesc();
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
 		UINT* numRow = new UINT[layoutSize];
 		UINT64* numRowSizeInBytes = new UINT64[layoutSize];
 		size_t totalBytes;
 		g_pDevice->GetCopyableFootprints(&texDesc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
-		
+
 		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(totalBytes);
 		// Create the GPU upload buffer.
 		g_pDevice->CreateCommittedResource(
@@ -383,11 +314,11 @@ void D3D::CreateCubeMap()
 			&uploadBuffer,
 			D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,
-			IID_PPV_ARGS(&m_pCubeMapUpload));
-		m_pCubeMapUpload->SetName(L"textureUploadHeap temp");
+			IID_PPV_ARGS(&pResUpload));
+		pResUpload->SetName(L"textureUploadHeap temp");
 
 		void* mappedData;
-		m_pCubeMapUpload->Map(0, nullptr, &mappedData);
+		pResUpload->Map(0, nullptr, &mappedData);
 
 		for (UINT face = 0, index = 0; face < texDesc.DepthOrArraySize; face++)
 		{
@@ -404,23 +335,22 @@ void D3D::CreateCubeMap()
 			}
 		}
 
-		m_pCubeMapUpload->Unmap(0, nullptr);
+		pResUpload->Unmap(0, nullptr);
 
 		for (UINT l = 0; l < layoutSize; l++)
 		{
-			CD3DX12_TEXTURE_COPY_LOCATION dst(m_pCubeMap.Get(), l); // 目标纹理的mip级别
-			CD3DX12_TEXTURE_COPY_LOCATION src(m_pCubeMapUpload.Get(), layouts[l]); // 上传堆的mip级别
+			CD3DX12_TEXTURE_COPY_LOCATION dst(pRes.Get(), l); // 目标纹理的mip级别
+			CD3DX12_TEXTURE_COPY_LOCATION src(pResUpload.Get(), layouts[l]); // 上传堆的mip级别
 
 			// 指定目标mip级别的x, y, z偏移量，通常为0
 			g_pCommandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
 		}
 
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pCubeMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRes.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		g_pCommandList->ResourceBarrier(1, &barrier);
 	}
 
-	m_pCubeMap->SetName(L"My Cube");
-
+	pRes->SetName(resName.c_str());
 	pImage.reset();
 }
 
