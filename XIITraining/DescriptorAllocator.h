@@ -9,8 +9,8 @@ enum DescriptorType
 
 struct DescriptorHeap
 {
-	ID3D12DescriptorHeap* heap;
-	DescriptorType heapType;
+	ID3D12DescriptorHeap* data;
+	DescriptorType type;
 };
 
 class DescriptorAllocator
@@ -24,10 +24,9 @@ public:
 	void CreateHeap(DescriptorType type);
 
 	// 检查当前所有对应类型的堆中是否还有可用空间
-	void CheckAllocable(DescriptorType type, UINT allocSize, UINT oFirstIndex);
+	bool CheckAllocable(DescriptorType type, UINT allocSize, UINT oHeapIdx, UINT oViewIdx);
 
 private:
 	ID3D12Device* m_pDevice;
-	std::vector<DescriptorHeap> m_srvHeaps;
-	std::vector<DescriptorHeap> m_cbvHeaps;
+	std::vector<DescriptorHeap> m_heaps;
 };

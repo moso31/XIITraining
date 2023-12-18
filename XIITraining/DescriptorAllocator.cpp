@@ -5,12 +5,12 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) :
 {
 }
 
-void DescriptorAllocator::AllocSRVHeap(UINT allocSize, UINT oFirstIndex)
+void DescriptorAllocator::Alloc(DescriptorType type, UINT allocSize, UINT oFirstIndex)
 {
 	// 如果所有堆里面都没有可以放描述符的空间，就新建堆
-	if (m_srvHeaps.empty())
+	if (CheckAllocable(type, allocSize))
 	{
-		CreateHeap(DescriptorType_SRV);
+
 	}
 }
 
@@ -24,14 +24,22 @@ void DescriptorAllocator::CreateHeap(DescriptorType type)
 	desc.NumDescriptors = 1000000; // why 1000000? see https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
 	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 此 allocator 只支持 CBVSRVUAV 这一种类型.
 
-	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&newHeap.heap));
-	newHeap.heapType = type;
+	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&newHeap.data));
+	newHeap.type = type;
 
-	switch (type)
+	m_heaps.push_back(newHeap);
+}
+
+bool DescriptorAllocator::CheckAllocable(DescriptorType type, UINT allocSize, UINT oHeapIdx, UINT oViewIdx)
+{
+	for (auto& heap : m_heaps)
 	{
-	case DescriptorType_CBV: m_cbvHeaps.push_back(newHeap); break;
-	case DescriptorType_SRV: m_srvHeaps.push_back(newHeap); break;
-	case DescriptorType_UAV: break;
-	default: break;
+		if (heap.type != type) continue;
+
+		const auto& heapDesc = heap.data->GetDesc();
+		UINT numViews = heap.data->GetDesc().NumDescriptors;
+
+		auto pHeapHead = heap.data->GetCPUDescriptorHandleForHeapStart();
+		pHeapHead.ptr += 
 	}
 }
