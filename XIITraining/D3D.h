@@ -1,5 +1,6 @@
 #pragma once
 #include "header.h"
+#include "DescriptorAllocator.h"
 
 class Mesh;
 
@@ -85,5 +86,7 @@ private:
 
 	ComPtr<ID3D12Resource> m_pCubeMap;
 	ComPtr<ID3D12Resource> m_pCubeMapUpload;
+
+	DescriptorAllocator* m_descriptorAllocator;
 };
 

@@ -246,12 +246,12 @@ void D3D::CreateDescriptorHeap()
 
 void D3D::CreateMyTexture()
 {
-	CreateTextureInternal("D:\\NixAssets\\rustediron2\\albedo.dds", L"My Cube", m_pTexture, m_pTextureUpload);
+	CreateTextureInternal("D:\\NixAssets\\rustediron2\\albedo.png", L"My Texture", m_pTexture, m_pTextureUpload);
 }
 
 void D3D::CreateCubeMap()
 {
-	CreateTextureInternal("D:\\NixAssets\\HDR\\ballroom_128_Mip.dds", L"My Cube", m_pCubeMap, m_pCubeMapUpload);
+	CreateTextureInternal("D:\\NixAssets\\HDR\\ballroom_4k.dds", L"My Cube", m_pCubeMap, m_pCubeMapUpload);
 }
 
 void D3D::CreateTextureInternal(const std::filesystem::path& path, const std::wstring& resName, ComPtr<ID3D12Resource>& pRes, ComPtr<ID3D12Resource>& pResUpload)
@@ -264,6 +264,10 @@ void D3D::CreateTextureInternal(const std::filesystem::path& path, const std::ws
 	if (strExt == ".dds")
 	{
 		hr = LoadFromDDSFile(path.wstring().c_str(), DDS_FLAGS_NONE, &metadata, *pImage);
+	}
+	else if (strExt == ".png" || strExt == ".tga")
+	{
+		hr = LoadFromWICFile(path.wstring().c_str(), WIC_FLAGS_NONE, &metadata, *pImage);
 	}
 	else
 	{
@@ -371,6 +375,9 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
+	m_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
+	m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
+	m_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
 
 	// 创建全局描述符堆
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
