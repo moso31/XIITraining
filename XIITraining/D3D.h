@@ -54,9 +54,6 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_pRTVHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pDSVHeap;
 
-	// pObjectCB全局常量缓冲区使用的描述符堆
-	ComPtr<ID3D12DescriptorHeap> m_pDescriptorHeapObject;
-
 	int m_width = 0;
 	int m_height = 0;
 

@@ -376,20 +376,8 @@ void D3D::CreateGlobalConstantBuffers()
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
 	m_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
-	m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
-	m_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
-	m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
-
-	// 创建全局描述符堆
-	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
-	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 常量缓冲区描述符类型
-	cbvHeapDesc.NumDescriptors = 4; // 目前的规划是；1：Mesh的纹理的SRV；2: CubeMap的纹理的SRV；3-n：Mesh 1-(n-2)的全局MVP矩阵的View。
-	cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // Shader 可见
-	cbvHeapDesc.NodeMask = 0; // 0表示所有节点。节点就是GPU，多GPU的设备可以用这个参数来指定使用哪个GPU。
-	g_pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pDescriptorHeapObject));
-
-	// 描述符堆的堆头指针
-	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pDescriptorHeapObject->GetCPUDescriptorHandleForHeapStart());
+	auto srvHandle = m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
+	auto cbvHandle = m_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
 
 	// 创建纹理使用的SRV描述符试图
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -402,7 +390,7 @@ void D3D::CreateGlobalConstantBuffers()
 	srvDesc.Texture2D.PlaneSlice = 0;
 
 	// 创建 SRV，并放在 描述符堆 的第1位
-	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, cbvHandle);
+	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(srvHandle, 0, m_nCBSRUAVDescriptorSize));
 
 	// 创建CubeMap使用的SRV描述符试图
 	D3D12_SHADER_RESOURCE_VIEW_DESC cubeSrvDesc = {};
@@ -414,17 +402,17 @@ void D3D::CreateGlobalConstantBuffers()
 	cubeSrvDesc.TextureCube.ResourceMinLODClamp = 0.0;
 
 	// 创建 SRV，并放在 描述符堆 的第2位
-	g_pDevice->CreateShaderResourceView(m_pCubeMap.Get(), &cubeSrvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+	g_pDevice->CreateShaderResourceView(m_pCubeMap.Get(), &cubeSrvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(srvHandle, 1, m_nCBSRUAVDescriptorSize));
 
 	{
 		// 创建CBV，并放在 描述符堆 的第3、4位
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
 		cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
-		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+		g_pDevice->CreateConstantBufferView(&cbvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHandle, 0, m_nCBSRUAVDescriptorSize));
 
 		cbvDesc.BufferLocation += cbvDesc.SizeInBytes; // 偏移一位
-		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle.Offset(1, m_nCBSRUAVDescriptorSize));
+		g_pDevice->CreateConstantBufferView(&cbvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHandle, 1, m_nCBSRUAVDescriptorSize));
 	}
 }
 
@@ -664,13 +652,14 @@ void D3D::RenderMeshes()
 {
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	ID3D12DescriptorHeap* ppHeaps[] = { m_pDescriptorHeapObject.Get() };
+	ID3D12DescriptorHeap* pRenderHeap = m_descriptorAllocator->CommitToRenderHeap();
+	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
 	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
-	g_pCommandList->SetGraphicsRootDescriptorTable(0, m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart());
+	g_pCommandList->SetGraphicsRootDescriptorTable(0, pRenderHeap->GetGPUDescriptorHandleForHeapStart());
 
 	// World 的部分需要逐 Mesh 更新
 	void* pTransformData;
@@ -684,7 +673,7 @@ void D3D::RenderMeshes()
 
 	m_pObjectCBUpload->Unmap(0, nullptr);
 
-	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_pDescriptorHeapObject->GetGPUDescriptorHandleForHeapStart(), 0, m_nCBSRUAVDescriptorSize);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(pRenderHeap->GetGPUDescriptorHandleForHeapStart(), 0, m_nCBSRUAVDescriptorSize);
 	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(2, m_nCBSRUAVDescriptorSize));
 	m_pMesh->Render();
 

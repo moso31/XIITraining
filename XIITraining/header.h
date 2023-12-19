@@ -6,6 +6,7 @@
 #include <d3dcompiler.h>
 
 #include <vector>
+#include <unordered_set>
 #include <filesystem>
 
 #include "ShaderStructures.h"

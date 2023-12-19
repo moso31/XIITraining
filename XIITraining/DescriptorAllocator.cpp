@@ -27,6 +27,55 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 	return handle;
 }
 
+ID3D12DescriptorHeap* DescriptorAllocator::CommitToRenderHeap()
+{
+	const static UINT DESCRIPTOR_SIZE = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	// 1. 创建一个 shader-visible 的描述符堆
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	desc.NodeMask = 0;
+	desc.NumDescriptors = GetDescriptorNum();
+	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_renderHeap));
+
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> pDestDescriptorRangeStarts = { m_renderHeap->GetCPUDescriptorHandleForHeapStart() };
+	std::vector<UINT> pDestDescriptorRangeSizes = { desc.NumDescriptors };
+
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> pSrcDescriptorRangeStarts;
+	std::vector<UINT> pSrcDescriptorRangeSizes;
+
+	// 提取 所有 heap 的 pSrcDescriptorRange.
+	for (UINT heapIdx = 0; heapIdx < m_heaps.size(); heapIdx++)
+	{
+		auto& heap = m_heaps[heapIdx];
+
+		UINT idx = 0;
+		while (idx < DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT)
+		{
+			if (heap.allocMap[idx])
+			{
+				UINT rangeStart = idx;
+				do idx++; while (idx < DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT && heap.allocMap[idx]);
+				UINT rangeSize = idx - rangeStart;
+
+				D3D12_CPU_DESCRIPTOR_HANDLE handle = heap.data->GetCPUDescriptorHandleForHeapStart();
+				handle.ptr += rangeStart * DESCRIPTOR_SIZE;
+
+				pSrcDescriptorRangeStarts.push_back(handle);
+				pSrcDescriptorRangeSizes.push_back(rangeSize);
+			}
+			idx++;
+		}
+	}
+
+	// 通过 pSrcDescriptorRange，将所有 non-shader-visible 的 m_heaps，都拷贝到 m_renderHeap 中
+	m_pDevice->CopyDescriptors(pDestDescriptorRangeSizes.size(), pDestDescriptorRangeStarts.data(), pDestDescriptorRangeSizes.data(),
+		pSrcDescriptorRangeSizes.size(), pSrcDescriptorRangeStarts.data(),pSrcDescriptorRangeSizes.data(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	return m_renderHeap;
+}
+
 void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)
 {
 	DescriptorHeap newHeap;
@@ -43,6 +92,7 @@ void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)
 	// 初始化 allocMap
 	memset(newHeap.allocMap, 0, sizeof(bool) * DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT);
 	memset(newHeap.allocMap, 1, sizeof(bool) * allocSize);
+	newHeap.allocatedSize = allocSize;
 
 	m_heaps.push_back(newHeap);
 }
@@ -71,6 +121,7 @@ bool DescriptorAllocator::CheckAllocable(DescriptorType type, UINT allocSize, UI
 					for (UINT j = idx; j < i; j++) heap.allocMap[j] = true;
 					oHeapIdx = heapIdx;
 					oDescriptorIdx = idx;
+					heap.allocatedSize += allocSize;
 					return true;
 				}
 				else idx = i + 1;
@@ -79,4 +130,11 @@ bool DescriptorAllocator::CheckAllocable(DescriptorType type, UINT allocSize, UI
 		}
 	}
 	return false;
+}
+
+UINT DescriptorAllocator::GetDescriptorNum()
+{
+	UINT result = 0;
+	for (auto& heap : m_heaps) result += heap.allocatedSize;
+	return result;
 }
