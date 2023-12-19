@@ -1,13 +1,13 @@
 #include "Material.h"
 
-void Material::Load(const std::filesystem::path& path, const std::string& vsEntry, const std::string& psEntry, const std::string& vsTarget, const std::string& psTarget)
+void Material::Load(const std::filesystem::path& shaderPath, const std::string& vsEntry, const std::string& psEntry, const std::string& vsTarget, const std::string& psTarget)
 {
 	ComPtr<ID3DBlob> pVSBlob;
 	ComPtr<ID3DBlob> pErrorBlob;
 	ComPtr<ID3DBlob> pPSBlob;
 
 	HRESULT hr;
-	hr = D3DCompileFromFile(path.wstring().c_str(), nullptr, nullptr, vsEntry.c_str(), vsTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pVSBlob, &pErrorBlob);
+	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, vsEntry.c_str(), vsTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pVSBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
 		if (pErrorBlob)
@@ -17,7 +17,7 @@ void Material::Load(const std::filesystem::path& path, const std::string& vsEntr
 		}
 	}
 
-	hr = D3DCompileFromFile(path.wstring().c_str(), nullptr, nullptr, psEntry.c_str(), psTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pPSBlob, &pErrorBlob);
+	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, psEntry.c_str(), psTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pPSBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
 		if (pErrorBlob)

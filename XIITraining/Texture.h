@@ -25,10 +25,11 @@ public:
 
 	void Load(const std::filesystem::path& path, const std::string& name);
 	void AddSRV(TextureType type);
+    size_t GetSRV(UINT index) const { return m_SRVs[index]; }
 
 private:
 	ComPtr<ID3D12Resource> m_pTexture;
 	ComPtr<ID3D12Resource> m_pTextureUpload;
 
-	std::vector<size_t> m_SRVs;
+	std::vector<size_t> m_SRVs; // size_t == D3D12_CPU_DESCRIPTOR_HANDLE.ptr
 };
