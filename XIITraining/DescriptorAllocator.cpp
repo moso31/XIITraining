@@ -17,7 +17,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 		// 没有可用空间，创建一个新的堆
 		heapIdx = (UINT)m_heaps.size();
 		descriptorIdx = 0;
-		CreateHeap(type);
+		CreateHeap(type, allocSize);
 	}
 
 	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
@@ -27,7 +27,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 	return handle;
 }
 
-void DescriptorAllocator::CreateHeap(DescriptorType type)
+void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)
 {
 	DescriptorHeap newHeap;
 
@@ -42,6 +42,7 @@ void DescriptorAllocator::CreateHeap(DescriptorType type)
 
 	// 初始化 allocMap
 	memset(newHeap.allocMap, 0, sizeof(bool) * DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT);
+	memset(newHeap.allocMap, 1, sizeof(bool) * allocSize);
 
 	m_heaps.push_back(newHeap);
 }

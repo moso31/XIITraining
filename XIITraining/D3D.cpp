@@ -378,6 +378,7 @@ void D3D::CreateGlobalConstantBuffers()
 	m_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
 	m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
 	m_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
+	m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
 
 	// 创建全局描述符堆
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;

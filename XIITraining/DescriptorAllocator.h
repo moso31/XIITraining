@@ -29,7 +29,7 @@ public:
 
 private:
 	// 新建一个描述符堆
-	void CreateHeap(DescriptorType type);
+	void CreateHeap(DescriptorType type, UINT allocSize);
 
 	// 检查当前所有对应类型的堆中是否还有可用空间
 	bool CheckAllocable(DescriptorType type, UINT allocSize, UINT& oHeapIdx, UINT& oDescriptorIdx);
