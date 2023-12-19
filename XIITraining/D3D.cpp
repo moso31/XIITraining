@@ -1,5 +1,7 @@
 #include "D3D.h"
 #include "Mesh.h"
+#include "Texture.h"
+#include "DescriptorAllocator.h"
 
 void D3D::Init()
 {
@@ -58,12 +60,20 @@ void D3D::Init()
 
 	CreateRootSignature();
 
+	// 创建描述符分配器
+	g_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
+
 	// 创建描述符堆
 	CreateDescriptorHeap();
 
 	// 创建实际应用到Mesh上的纹理资源
-	CreateMyTexture();
-	CreateCubeMap();
+	m_pTextureBox = new Texture();
+	m_pTextureBox->Load("D:\\NixAssets\\rustediron2\\albedo.png", "My Texture");
+	m_pTextureBox->AddSRV(TextureType_2D);
+
+	m_pTextureCubeMap = new Texture();
+	m_pTextureCubeMap->Load("D:\\NixAssets\\HDR\\ballroom_4k.dds", "My Cube");
+	m_pTextureCubeMap->AddSRV(TextureType_Cube);
 
 	CreateGlobalConstantBuffers();
 
@@ -244,120 +254,6 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
-void D3D::CreateMyTexture()
-{
-	CreateTextureInternal("D:\\NixAssets\\rustediron2\\albedo.png", L"My Texture", m_pTexture, m_pTextureUpload);
-}
-
-void D3D::CreateCubeMap()
-{
-	CreateTextureInternal("D:\\NixAssets\\HDR\\ballroom_4k.dds", L"My Cube", m_pCubeMap, m_pCubeMapUpload);
-}
-
-void D3D::CreateTextureInternal(const std::filesystem::path& path, const std::wstring& resName, ComPtr<ID3D12Resource>& pRes, ComPtr<ID3D12Resource>& pResUpload)
-{
-	HRESULT hr;
-	TexMetadata metadata;
-	std::unique_ptr<ScratchImage> pImage = std::make_unique<ScratchImage>();
-
-	std::string strExt = path.extension().string();
-	if (strExt == ".dds")
-	{
-		hr = LoadFromDDSFile(path.wstring().c_str(), DDS_FLAGS_NONE, &metadata, *pImage);
-	}
-	else if (strExt == ".png" || strExt == ".tga")
-	{
-		hr = LoadFromWICFile(path.wstring().c_str(), WIC_FLAGS_NONE, &metadata, *pImage);
-	}
-	else
-	{
-		pImage.reset();
-		return;
-	}
-
-	// Create the texture.
-	{
-		// Describe and create a Texture2D.
-		D3D12_RESOURCE_DESC desc = {};
-		desc.Width = static_cast<UINT>(metadata.width);
-		desc.Height = static_cast<UINT>(metadata.height);
-		desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
-		desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
-			? static_cast<UINT16>(metadata.depth)
-			: static_cast<UINT16>(metadata.arraySize);
-		desc.Format = metadata.format;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.SampleDesc.Count = 1;
-		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
-
-		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-
-		g_pDevice->CreateCommittedResource(
-			&defaultHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&pRes));
-
-		UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
-
-		auto texDesc = pRes->GetDesc();
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
-		UINT* numRow = new UINT[layoutSize];
-		UINT64* numRowSizeInBytes = new UINT64[layoutSize];
-		size_t totalBytes;
-		g_pDevice->GetCopyableFootprints(&texDesc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
-
-		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(totalBytes);
-		// Create the GPU upload buffer.
-		g_pDevice->CreateCommittedResource(
-			&uploadHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&uploadBuffer,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&pResUpload));
-		pResUpload->SetName(L"textureUploadHeap temp");
-
-		void* mappedData;
-		pResUpload->Map(0, nullptr, &mappedData);
-
-		for (UINT face = 0, index = 0; face < texDesc.DepthOrArraySize; face++)
-		{
-			for (UINT mip = 0; mip < texDesc.MipLevels; mip++, index++)
-			{
-				const Image* pImg = pImage->GetImage(mip, face, 0);
-				const BYTE* pSrcData = pImg->pixels;
-				BYTE* pDstData = reinterpret_cast<BYTE*>(mappedData) + layouts[index].Offset;
-
-				for (UINT y = 0; y < numRow[index]; y++)
-				{
-					memcpy(pDstData + layouts[index].Footprint.RowPitch * y, pSrcData + pImg->rowPitch * y, numRowSizeInBytes[index]);
-				}
-			}
-		}
-
-		pResUpload->Unmap(0, nullptr);
-
-		for (UINT l = 0; l < layoutSize; l++)
-		{
-			CD3DX12_TEXTURE_COPY_LOCATION dst(pRes.Get(), l); // 目标纹理的mip级别
-			CD3DX12_TEXTURE_COPY_LOCATION src(pResUpload.Get(), layouts[l]); // 上传堆的mip级别
-
-			// 指定目标mip级别的x, y, z偏移量，通常为0
-			g_pCommandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-		}
-
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRes.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		g_pCommandList->ResourceBarrier(1, &barrier);
-	}
-
-	pRes->SetName(resName.c_str());
-	pImage.reset();
-}
-
 void D3D::CreateGlobalConstantBuffers()
 {
 	// 创建全局常量缓冲区，存储MVP矩阵
@@ -375,34 +271,7 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
-	m_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
-	auto srvHandle = m_descriptorAllocator->Alloc(DescriptorType_SRV, 2);
-	auto cbvHandle = m_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
-
-	// 创建纹理使用的SRV描述符试图
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 默认的映射
-	srvDesc.Format = m_pTexture->GetDesc().Format; // 纹理的格式
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = m_pTexture->GetDesc().MipLevels;
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.ResourceMinLODClamp = 0.0;
-	srvDesc.Texture2D.PlaneSlice = 0;
-
-	// 创建 SRV，并放在 描述符堆 的第1位
-	g_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(srvHandle, 0, m_nCBSRUAVDescriptorSize));
-
-	// 创建CubeMap使用的SRV描述符试图
-	D3D12_SHADER_RESOURCE_VIEW_DESC cubeSrvDesc = {};
-	cubeSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; // 默认的映射
-	cubeSrvDesc.Format = m_pCubeMap->GetDesc().Format; // 纹理的格式
-	cubeSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-	cubeSrvDesc.TextureCube.MipLevels = m_pCubeMap->GetDesc().MipLevels;
-	cubeSrvDesc.TextureCube.MostDetailedMip = 0;
-	cubeSrvDesc.TextureCube.ResourceMinLODClamp = 0.0;
-
-	// 创建 SRV，并放在 描述符堆 的第2位
-	g_pDevice->CreateShaderResourceView(m_pCubeMap.Get(), &cubeSrvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(srvHandle, 1, m_nCBSRUAVDescriptorSize));
+	auto cbvHandle = g_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
 
 	{
 		// 创建CBV，并放在 描述符堆 的第3、4位
@@ -652,7 +521,7 @@ void D3D::RenderMeshes()
 {
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	ID3D12DescriptorHeap* pRenderHeap = m_descriptorAllocator->CommitToRenderHeap();
+	ID3D12DescriptorHeap* pRenderHeap = g_descriptorAllocator->CommitToRenderHeap();
 	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
 	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
@@ -688,6 +557,9 @@ void D3D::Release()
 		delete m_pMesh;
 		m_pMesh = nullptr;
 	}
+
+	if (m_pTextureBox) delete m_pTextureBox;
+	if (m_pTextureCubeMap) delete m_pTextureCubeMap;
 }
 
 UINT D3DUtil::CalcBufferViewSize(UINT sizeInBytes)

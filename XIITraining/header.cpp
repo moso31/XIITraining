@@ -11,4 +11,6 @@ ComPtr<ID3D12CommandQueue> g_pCommandQueue; // 命令队列
 ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
 ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
 
+DescriptorAllocator* g_descriptorAllocator;
+
 MeshTransformData g_cbObjectData;

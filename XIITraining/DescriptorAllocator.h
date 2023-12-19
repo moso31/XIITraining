@@ -1,3 +1,4 @@
+#pragma once
 #include "header.h"
 
 // why 1000000? see https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support

@@ -1,8 +1,8 @@
 #pragma once
 #include "header.h"
-#include "DescriptorAllocator.h"
 
 class Mesh;
+class Texture;
 
 class D3DUtil
 {
@@ -78,12 +78,7 @@ private:
 	Mesh* m_pMesh = nullptr;
 	Mesh* m_pMeshCube = nullptr;
 
-	ComPtr<ID3D12Resource> m_pTexture;
-	ComPtr<ID3D12Resource> m_pTextureUpload;
-
-	ComPtr<ID3D12Resource> m_pCubeMap;
-	ComPtr<ID3D12Resource> m_pCubeMapUpload;
-
-	DescriptorAllocator* m_descriptorAllocator;
+	Texture* m_pTextureBox;
+	Texture* m_pTextureCubeMap;
 };
 

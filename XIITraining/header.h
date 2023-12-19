@@ -16,6 +16,8 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
+class DescriptorAllocator;
+
 extern HWND g_hWnd;
 
 class D3D;
@@ -28,5 +30,8 @@ extern ComPtr<ID3D12Device8> g_pDevice;
 extern ComPtr<ID3D12CommandQueue> g_pCommandQueue; // 命令队列
 extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
 extern ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
+
+// 喵喵符分配器
+extern DescriptorAllocator* g_descriptorAllocator;
 
 extern MeshTransformData g_cbObjectData;
