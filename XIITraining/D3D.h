@@ -3,7 +3,7 @@
 
 class Mesh;
 class Texture;
-
+class Material;
 class D3DUtil
 {
 public:
@@ -73,12 +73,13 @@ private:
 	UINT64 m_currFenceIdx = 0;
 
 	ComPtr<ID3D12Resource> m_pObjectCBUpload;
-	ComPtr<ID3D12RootSignature> m_pRootSignature;
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
+
 	Mesh* m_pMesh = nullptr;
 	Mesh* m_pMeshCube = nullptr;
 
-	Texture* m_pTextureBox;
-	Texture* m_pTextureCubeMap;
+	Material* m_pMaterial = nullptr;
+
+	Texture* m_pTextureBox = nullptr;
+	Texture* m_pTextureCubeMap = nullptr;
 };
 

@@ -138,6 +138,7 @@
     <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="header.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Material.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Texture.cpp" />
   </ItemGroup>
@@ -146,6 +147,7 @@
     <ClInclude Include="D3D.h" />
     <ClInclude Include="DescriptorAllocator.h" />
     <ClInclude Include="header.h" />
+    <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Texture.h" />

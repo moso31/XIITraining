@@ -1,6 +1,7 @@
 #include "D3D.h"
 #include "Mesh.h"
 #include "Texture.h"
+#include "Material.h"
 #include "DescriptorAllocator.h"
 
 void D3D::Init()
@@ -560,6 +561,8 @@ void D3D::Release()
 
 	if (m_pTextureBox) delete m_pTextureBox;
 	if (m_pTextureCubeMap) delete m_pTextureCubeMap;
+
+	if (m_pMaterial) delete m_pMaterial;
 }
 
 UINT D3DUtil::CalcBufferViewSize(UINT sizeInBytes)

@@ -126,7 +126,7 @@ void Texture::AddSRV(TextureType type)
 		srvDesc.Texture1D.MostDetailedMip = 0;
 		srvDesc.Texture1D.ResourceMinLODClamp = 0.0;
 	}
-	if (type == TextureType_2D)
+	else if (type == TextureType_2D)
 	{
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 		srvDesc.Texture2D.MipLevels = texDesc.MipLevels;
@@ -134,14 +134,14 @@ void Texture::AddSRV(TextureType type)
 		srvDesc.Texture2D.ResourceMinLODClamp = 0.0;
 		srvDesc.Texture2D.PlaneSlice = 0;
 	}
-	if (type == TextureType_3D)
+	else if (type == TextureType_3D)
 	{
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
 		srvDesc.Texture3D.MipLevels = texDesc.MipLevels;
 		srvDesc.Texture3D.MostDetailedMip = 0;
 		srvDesc.Texture3D.ResourceMinLODClamp = 0.0;
 	}
-	if (type == TextureType_Cube)
+	else if (type == TextureType_Cube)
 	{
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 		srvDesc.TextureCube.MipLevels = texDesc.MipLevels;
