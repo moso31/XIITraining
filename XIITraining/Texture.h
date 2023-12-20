@@ -25,7 +25,8 @@ public:
 
 	void Load(const std::filesystem::path& path, const std::string& name);
 	void AddSRV(TextureType type);
-    size_t GetSRV(UINT index) const { return m_SRVs[index]; }
+    const size_t GetSRV(UINT index) const { return m_SRVs[index]; }
+    const size_t* GetSRVs() const { return m_SRVs.data(); }
 
 private:
 	ComPtr<ID3D12Resource> m_pTexture;

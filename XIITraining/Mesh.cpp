@@ -1,4 +1,5 @@
 #include "Mesh.h"
+#include "Material.h"
 
 void Mesh::InitBox()
 {
@@ -165,6 +166,12 @@ void Mesh::CreateIB()
 void Mesh::SetScale(float x, float y, float z)
 {
 	m_scale = { x, y, z };
+}
+
+void Mesh::SetMaterial(Material* pMaterial)
+{
+	m_pMaterial = pMaterial;
+	m_pMaterial->AddRefMesh(this);
 }
 
 void Mesh::Update()

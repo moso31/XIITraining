@@ -59,8 +59,6 @@ void D3D::Init()
 	// 创建交换链
 	CreateSwapChain();
 
-	CreateRootSignature();
-
 	// 创建描述符分配器
 	g_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
 
@@ -76,15 +74,23 @@ void D3D::Init()
 	m_pTextureCubeMap->Load("D:\\NixAssets\\HDR\\ballroom_4k.dds", "My Cube");
 	m_pTextureCubeMap->AddSRV(TextureType_Cube);
 
-	// 创建材质
-	m_pMaterialBox = new Material();
-	m_pMaterialBox->Load(".\\Color.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
+	// 创建材质，指定纹理，手动编译。
+	auto pMaterialBox = new Material();
+	pMaterialBox->Load(".\\Color.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
+	pMaterialBox->SetTexture(m_pTextureBox);
+	pMaterialBox->Reprofile();
 
-	m_pMaterialCubeMap = new Material();
-	m_pMaterialCubeMap->Load(".\\CubeMap.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
+	auto pMaterialCubeMap = new Material();
+	pMaterialCubeMap->Load(".\\CubeMap.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
+	pMaterialCubeMap->SetTexture(m_pTextureCubeMap);
+	pMaterialBox->Reprofile();
+
+	m_pMaterials.push_back(pMaterialBox);
+	m_pMaterials.push_back(pMaterialCubeMap);
 
 	CreateGlobalConstantBuffers();
 
+	// 建模型
 	m_pMesh = new Mesh();
 	m_pMesh->InitBox();
 	m_pMesh->SetScale(1.0f, 1.0f, 1.0f);
@@ -95,6 +101,10 @@ void D3D::Init()
 	m_pMeshCube->SetScale(100.0f, 100.0f, 100.0f);
 	//m_pMeshCube->SetScale(0.1f, 0.1f, 0.1f);
 	m_pMeshCube->SetRotate(true);
+
+	// 给模型绑材质
+	m_pMesh->SetMaterial(pMaterialBox);
+	m_pMeshCube->SetMaterial(pMaterialCubeMap);
 
 	// 暂时先使用固定的相机参数
 	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
@@ -291,45 +301,6 @@ void D3D::CreateGlobalConstantBuffers()
 	}
 }
 
-void D3D::CreateRootSignature()
-{
-	// 创建静态采样器
-	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-	samplerDesc.ShaderRegister = 0; // HLSL中的寄存器号 = s0
-	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // 只在像素着色器中可见
-	samplerDesc.RegisterSpace = 0;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 超出纹理坐标的部分，采用环绕方式
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.MipLODBias = 0; // MipLOD偏移
-	samplerDesc.MinLOD = 0.0f; // MipLOD的下界
-	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX; // MipLOD的上界
-	samplerDesc.MaxAnisotropy = 1; // 各向异性过滤
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 比较函数
-	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-
-	std::vector<D3D12_STATIC_SAMPLER_DESC> pSamplers = { samplerDesc };
-
-	CD3DX12_ROOT_PARAMETER rootParam[2];
-	{
-		CD3DX12_DESCRIPTOR_RANGE range[1];
-		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, 0); // 1个SRV，slot 0~1，space0，从堆的第0位开始读取
-		rootParam[0].InitAsDescriptorTable(_countof(range), range);
-	}
-	{
-		CD3DX12_DESCRIPTOR_RANGE range[1];
-		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，slot 0，space0，从堆的第2位开始读取
-		rootParam[1].InitAsDescriptorTable(_countof(range), range);
-	}
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-	ID3DBlob* signature;
-	HRESULT hr;
-	hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
-	hr = g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
-}
-
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
 {
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
@@ -343,6 +314,17 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
 ID3D12Resource* D3D::GetSwapChainBackBuffer() const
 {
 	return m_pSwapChainRT[m_pSwapChain->GetCurrentBackBufferIndex()].Get();
+}
+
+void D3D::Prepare()
+{
+	for (auto& pMaterial : m_pMaterials)
+	{
+		// 获取这个材质使用的所有 View
+		pMaterial->GetViewsGroup();
+
+		// 将这些 View 追加到 shader-visible 的描述符堆
+	}
 }
 
 void D3D::Draw()

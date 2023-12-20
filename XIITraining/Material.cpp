@@ -1,13 +1,12 @@
 #include "Material.h"
+#include "Texture.h"
 
 void Material::Load(const std::filesystem::path& shaderPath, const std::string& vsEntry, const std::string& psEntry, const std::string& vsTarget, const std::string& psTarget)
 {
-	ComPtr<ID3DBlob> pVSBlob;
 	ComPtr<ID3DBlob> pErrorBlob;
-	ComPtr<ID3DBlob> pPSBlob;
 
 	HRESULT hr;
-	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, vsEntry.c_str(), vsTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pVSBlob, &pErrorBlob);
+	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, vsEntry.c_str(), vsTarget.c_str(), D3DCOMPILE_DEBUG, 0, &m_pVSBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
 		if (pErrorBlob)
@@ -17,7 +16,7 @@ void Material::Load(const std::filesystem::path& shaderPath, const std::string& 
 		}
 	}
 
-	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, psEntry.c_str(), psTarget.c_str(), D3DCOMPILE_DEBUG, 0, &pPSBlob, &pErrorBlob);
+	hr = D3DCompileFromFile(shaderPath.wstring().c_str(), nullptr, nullptr, psEntry.c_str(), psTarget.c_str(), D3DCOMPILE_DEBUG, 0, &m_pPSBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
 		if (pErrorBlob)
@@ -26,7 +25,58 @@ void Material::Load(const std::filesystem::path& shaderPath, const std::string& 
 			OutputDebugStringA(str.c_str());
 		}
 	}
+}
 
+void Material::Reprofile()
+{
+	CreateRootSignature();
+	CreatePSO();
+	CreateViewsGroup();
+}
+
+void Material::CreateRootSignature()
+{
+	// 创建静态采样器
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.ShaderRegister = 0; // HLSL中的寄存器号 = s0
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // 只在像素着色器中可见
+	samplerDesc.RegisterSpace = 0;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 超出纹理坐标的部分，采用环绕方式
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.MipLODBias = 0; // MipLOD偏移
+	samplerDesc.MinLOD = 0.0f; // MipLOD的下界
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX; // MipLOD的上界
+	samplerDesc.MaxAnisotropy = 1; // 各向异性过滤
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 比较函数
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+
+	std::vector<D3D12_STATIC_SAMPLER_DESC> pSamplers = { samplerDesc };
+
+	CD3DX12_ROOT_PARAMETER rootParam[2];
+	{
+		CD3DX12_DESCRIPTOR_RANGE range[1];
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0); // 1个SRV，slot 0~1，space0
+		rootParam[0].InitAsDescriptorTable(_countof(range), range);
+	}
+	{
+		CD3DX12_DESCRIPTOR_RANGE range[1];
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，slot 0，space0
+		rootParam[1].InitAsDescriptorTable(_countof(range), range);
+	}
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	ID3DBlob* signature;
+	HRESULT hr;
+	hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, nullptr);
+	hr = g_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature));
+}
+
+void Material::CreatePSO()
+{
+	// il bs dss rs 都是懒得处理才写在这里的
+	// 实际上更推荐整个专门的管理器类处理它们。
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -83,10 +133,12 @@ void Material::Load(const std::filesystem::path& shaderPath, const std::string& 
 	depthStencilState.FrontFace = defaultStencilOp;
 	depthStencilState.BackFace = defaultStencilOp;
 
+
+	// 创建PSO
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = m_pRootSignature.Get();
-	psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize());
-	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize());
+	psoDesc.VS = CD3DX12_SHADER_BYTECODE(m_pVSBlob->GetBufferPointer(), m_pVSBlob->GetBufferSize());
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(m_pPSBlob->GetBufferPointer(), m_pPSBlob->GetBufferSize());
 	psoDesc.InputLayout = { inputLayout, _countof(inputLayout) };
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psoDesc.BlendState = blendState;
@@ -98,4 +150,14 @@ void Material::Load(const std::filesystem::path& shaderPath, const std::string& 
 	psoDesc.SampleDesc.Quality = 0;
 	psoDesc.SampleMask = UINT32_MAX;
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	g_pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPipelineState));
+}
+
+void Material::CreateViewsGroup()
+{
+	m_viewsGroup.clear();
+
+	// 获取纹理使用的SRV，并构建为材质的ViewGroup的一部分。
+	// 为了简单起见，我们只处理一种情况，即纹理只有一个且只使用这一个SRV。
+	m_viewsGroup.push_back(m_pTexture->GetSRV(0));
 }

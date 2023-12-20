@@ -1,6 +1,7 @@
 #pragma once
 #include "header.h"
 
+class Material;
 class Mesh
 {
 public:
@@ -11,6 +12,8 @@ public:
 
 	void SetScale(float x, float y, float z);
 	void SetRotate(bool val) { m_rotate = val; }
+
+	void SetMaterial(Material* pMaterial);
 
 private:
 	void CreateVB();
@@ -27,5 +30,8 @@ private:
 
 	bool m_rotate;
 	Vector3 m_scale;
+
+	// 本Demo中 一个网格只有一个材质
+	Material* m_pMaterial;
 };
 

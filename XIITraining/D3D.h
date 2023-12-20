@@ -18,6 +18,9 @@ public:
 
 	void Init();
 
+	// Prepare 的职责：
+	// 按材质遍历，对每个材质，按材质shader代码中所记录的描述符顺序，通过descriptorAllocator，在shader-visible堆中追加同样数量的描述符集，并记录在shader-visible堆中生成的第一个描述符的偏移量
+	void Prepare();
 	void Draw();
 
 	void FlushCommandQueue();
@@ -72,8 +75,7 @@ private:
 	Mesh* m_pMesh = nullptr;
 	Mesh* m_pMeshCube = nullptr;
 
-	Material* m_pMaterialBox = nullptr;
-	Material* m_pMaterialCubeMap = nullptr;
+	std::vector<Material*> m_pMaterials;
 
 	Texture* m_pTextureBox = nullptr;
 	Texture* m_pTextureCubeMap = nullptr;
