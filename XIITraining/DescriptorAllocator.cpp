@@ -1,14 +1,20 @@
 #include "DescriptorAllocator.h"
 
 DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) : 
-	m_pDevice(pDevice)
+	m_pDevice(pDevice),
+	m_descriptorSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV))
 {
+	// 创建一个 shader-visible 的描述符堆，用于渲染前每帧提交。
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	desc.NodeMask = 0;
+	desc.NumDescriptors = DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT;
+	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_renderHeap));
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT allocSize)
 {
-	const static UINT DESCRIPTOR_SIZE = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
 	UINT heapIdx, descriptorIdx;
 
 	// 检查当前所有对应类型的堆中是否还有可用空间，有的话记录是 哪个堆（heapIdx）的 哪个描述符段（descriptorIdx）
@@ -22,58 +28,29 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 
 	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_heaps[heapIdx].data->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += descriptorIdx * DESCRIPTOR_SIZE;
+	handle.ptr += descriptorIdx * m_descriptorSize;
 
 	return handle;
 }
 
-ID3D12DescriptorHeap* DescriptorAllocator::CommitToRenderHeap()
+void DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
 {
-	const static UINT DESCRIPTOR_SIZE = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	// 1. 创建一个 shader-visible 的描述符堆
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	desc.NodeMask = 0;
-	desc.NumDescriptors = GetDescriptorNum();
-	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_renderHeap));
-
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> pDestDescriptorRangeStarts = { m_renderHeap->GetCPUDescriptorHandleForHeapStart() };
-	std::vector<UINT> pDestDescriptorRangeSizes = { desc.NumDescriptors };
-
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> pSrcDescriptorRangeStarts;
-	std::vector<UINT> pSrcDescriptorRangeSizes;
-
-	// 提取 所有 heap 的 pSrcDescriptorRange.
-	for (UINT heapIdx = 0; heapIdx < m_heaps.size(); heapIdx++)
+	for (size_t i = 0; i < cpuHandlesSize; i++)
 	{
-		auto& heap = m_heaps[heapIdx];
+		D3D12_CPU_DESCRIPTOR_HANDLE srcHandle;
+		srcHandle.ptr = cpuHandles[i];
 
-		UINT idx = 0;
-		while (idx < DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT)
-		{
-			if (heap.allocMap[idx])
-			{
-				UINT rangeStart = idx;
-				do idx++; while (idx < DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT && heap.allocMap[idx]);
-				UINT rangeSize = idx - rangeStart;
+		// 计算新的 ring buffer 偏移量
+		size_t heapOffset = m_currentOffset * m_descriptorSize;
+		D3D12_CPU_DESCRIPTOR_HANDLE destHandle = m_renderHeap->GetCPUDescriptorHandleForHeapStart();
+		destHandle.ptr += heapOffset;
 
-				D3D12_CPU_DESCRIPTOR_HANDLE handle = heap.data->GetCPUDescriptorHandleForHeapStart();
-				handle.ptr += rangeStart * DESCRIPTOR_SIZE;
+		// 拷贝描述符
+		m_pDevice->CopyDescriptorsSimple(1, destHandle, srcHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-				pSrcDescriptorRangeStarts.push_back(handle);
-				pSrcDescriptorRangeSizes.push_back(rangeSize);
-			}
-			idx++;
-		}
+		// 更新偏移量
+		m_currentOffset = (m_currentOffset + 1) % DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT;
 	}
-
-	// 通过 pSrcDescriptorRange，将所有 non-shader-visible 的 m_heaps，都拷贝到 m_renderHeap 中
-	m_pDevice->CopyDescriptors(pDestDescriptorRangeSizes.size(), pDestDescriptorRangeStarts.data(), pDestDescriptorRangeSizes.data(),
-		pSrcDescriptorRangeSizes.size(), pSrcDescriptorRangeStarts.data(),pSrcDescriptorRangeSizes.data(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	return m_renderHeap;
 }
 
 void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)

@@ -60,7 +60,7 @@ void D3D::Init()
 	CreateSwapChain();
 
 	// 创建描述符分配器
-	g_descriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
+	g_pDescriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
 
 	// 创建描述符堆
 	CreateDescriptorHeap();
@@ -287,7 +287,7 @@ void D3D::CreateGlobalConstantBuffers()
 	);
 	m_pObjectCBUpload->SetName(L"Object CB Upload");
 
-	auto cbvHandle = g_descriptorAllocator->Alloc(DescriptorType_CBV, 2);
+	auto cbvHandle = g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 2);
 
 	{
 		// 创建CBV，并放在 描述符堆 的第3、4位
@@ -320,10 +320,12 @@ void D3D::Prepare()
 {
 	for (auto& pMaterial : m_pMaterials)
 	{
-		// 获取这个材质使用的所有 View
-		pMaterial->GetViewsGroup();
+		// 获取这个材质使用的所有 non-shader-visible (cpu) 描述符
+		const size_t* pDescriptors = pMaterial->GetViewsGroup();
+		const size_t pDescriptorsSize = pMaterial->GetViewsGroupSize();
 
-		// 将这些 View 追加到 shader-visible 的描述符堆
+		// 将这些 描述符 追加到 shader-visible (gpu) 的描述符堆 
+		g_pDescriptorAllocator->AppendToRenderHeap(pDescriptors, pDescriptorsSize);
 	}
 }
 
@@ -406,7 +408,7 @@ void D3D::RenderMeshes()
 {
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	ID3D12DescriptorHeap* pRenderHeap = g_descriptorAllocator->CommitToRenderHeap();
+	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->CommitToRenderHeap();
 	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
 	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 

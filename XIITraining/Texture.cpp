@@ -110,7 +110,7 @@ void Texture::AddSRV(TextureType type)
 {
 	if (!m_pTexture) return;
 
-	auto cpuHandle = g_descriptorAllocator->Alloc(DescriptorType_SRV, 1);
+	auto cpuHandle = g_pDescriptorAllocator->Alloc(DescriptorType_SRV, 1);
 
 	const auto& texDesc = m_pTexture->GetDesc();
 

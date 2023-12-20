@@ -32,6 +32,6 @@ extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
 extern ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
 
 // 喵喵符分配器
-extern DescriptorAllocator* g_descriptorAllocator;
+extern DescriptorAllocator* g_pDescriptorAllocator;
 
 extern MeshTransformData g_cbObjectData;

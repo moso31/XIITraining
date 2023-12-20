@@ -38,9 +38,8 @@ public:
 	// 在堆里找一段大小为 allocSize 的空间，并分配描述符
 	D3D12_CPU_DESCRIPTOR_HANDLE Alloc(DescriptorType type, UINT allocSize);
 
-	// 因为最终cmdList->SetDescriptorHeaps()只能接受一个 shader-visible 的描述符堆，
-	// 所有渲染前，由此方法将所有 non-shader-visible 的 m_heaps，都拷贝到一个 shader-visible 的 m_renderHeap 中。
-	ID3D12DescriptorHeap* CommitToRenderHeap();
+	// 将一组描述符拷贝到 m_renderHeap 中
+	void AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
 
 private:
 	// 新建一个描述符堆
@@ -53,8 +52,10 @@ private:
 	UINT GetDescriptorNum();
 
 private:
+	const UINT m_descriptorSize;
 	ID3D12Device* m_pDevice;
 	std::vector<DescriptorHeap> m_heaps;
 
 	ID3D12DescriptorHeap* m_renderHeap;
+	size_t m_currentOffset = 0;
 };
