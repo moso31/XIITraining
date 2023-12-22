@@ -134,6 +134,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="App.cpp" />
+    <ClCompile Include="CBufferAllocator.cpp" />
     <ClCompile Include="D3D.cpp" />
     <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="header.cpp" />
@@ -144,6 +145,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
+    <ClInclude Include="CBufferAllocator.h" />
     <ClInclude Include="D3D.h" />
     <ClInclude Include="DescriptorAllocator.h" />
     <ClInclude Include="header.h" />

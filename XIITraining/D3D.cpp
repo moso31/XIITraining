@@ -408,6 +408,8 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
+	// TODO：应该在更上层每帧更新cbPerCamera
+
 	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->GetRenderHeap();
@@ -421,6 +423,12 @@ void D3D::RenderMeshes()
 		gpuHandle.ptr += pMat->GetShaderVisibleHeapOffset() * g_pDescriptorAllocator->GetRenderHeapDescriptorByteSize();
 
 		g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+
+		for (auto& pMesh : pMat->GetSubMeshes())
+		{
+			// TODO：pMesh也应该有一个自己的根参数CBV，记录cbPerObject
+			g_pCommandList->SetGraphicsRootConstantBufferView(1, );
+		}
 	}
 
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());

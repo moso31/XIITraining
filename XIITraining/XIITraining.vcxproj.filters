@@ -9,6 +9,7 @@
     <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Material.cpp" />
+    <ClCompile Include="CBufferAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -19,6 +20,7 @@
     <ClInclude Include="DescriptorAllocator.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Material.h" />
+    <ClInclude Include="CBufferAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Color.fx" />
