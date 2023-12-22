@@ -325,7 +325,9 @@ void D3D::Prepare()
 		const size_t pDescriptorsSize = pMaterial->GetViewsGroupSize();
 
 		// 将这些 描述符 追加到 shader-visible (gpu) 的描述符堆 
-		g_pDescriptorAllocator->AppendToRenderHeap(pDescriptors, pDescriptorsSize);
+		UINT renderHeapOffset = g_pDescriptorAllocator->AppendToRenderHeap(pDescriptors, pDescriptorsSize);
+
+		pMaterial->SetShaderVisibleHeapOffset(renderHeapOffset);
 	}
 }
 
@@ -406,6 +408,11 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
+	for (auto& pMat : m_pMaterials)
+	{
+		pMat->GetShaderVisibleHeapOffset();
+	}
+
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
 	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->CommitToRenderHeap();

@@ -38,8 +38,8 @@ public:
 	// 在堆里找一段大小为 allocSize 的空间，并分配描述符
 	D3D12_CPU_DESCRIPTOR_HANDLE Alloc(DescriptorType type, UINT allocSize);
 
-	// 将一组描述符拷贝到 m_renderHeap 中
-	void AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
+	// 将一组描述符拷贝到 m_renderHeap 中，并返回其在ring buffer中的偏移量
+	UINT AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
 
 private:
 	// 新建一个描述符堆

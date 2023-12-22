@@ -51,4 +51,10 @@ private:
 
 	// 记录此材质的所有cpuHandle
 	std::vector<size_t> m_viewsGroup;
+
+	// 材质所使用的所有根参数
+	// 目前的规划是，一张描述符表记录所有的材质，一个CBV记录
+	std::vector<D3D12_ROOT_PARAMETER> m_rootParameters;
+
+	std::vector<D3D12_DESCRIPTOR_RANGE> m_descriptorRange;
 };

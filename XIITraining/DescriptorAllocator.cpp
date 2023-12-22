@@ -33,7 +33,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 	return handle;
 }
 
-void DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
+UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
 {
 	for (size_t i = 0; i < cpuHandlesSize; i++)
 	{
@@ -51,6 +51,8 @@ void DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const siz
 		// ¸üÐÂÆ«ÒÆÁ¿
 		m_currentOffset = (m_currentOffset + 1) % DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT;
 	}
+
+	return m_currentOffset;
 }
 
 void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)
