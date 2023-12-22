@@ -408,21 +408,24 @@ void D3D::FlushCommandQueue()
 
 void D3D::RenderMeshes()
 {
+	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->GetRenderHeap();
+	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
+	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
 	for (auto& pMat : m_pMaterials)
 	{
-		pMat->GetShaderVisibleHeapOffset();
+		// 获取在 shader-visible heap 中 的描述符偏移量
+		auto gpuHandle = pRenderHeap->GetGPUDescriptorHandleForHeapStart();
+		gpuHandle.ptr += pMat->GetShaderVisibleHeapOffset() * g_pDescriptorAllocator->GetRenderHeapDescriptorByteSize();
+
+		g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
 	}
 
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->CommitToRenderHeap();
-	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
-	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
-
-	g_pCommandList->SetGraphicsRootDescriptorTable(0, pRenderHeap->GetGPUDescriptorHandleForHeapStart());
 
 	// World 的部分需要逐 Mesh 更新
 	void* pTransformData;

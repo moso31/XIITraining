@@ -41,6 +41,10 @@ public:
 	// 将一组描述符拷贝到 m_renderHeap 中，并返回其在ring buffer中的偏移量
 	UINT AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
 
+	ID3D12DescriptorHeap* GetRenderHeap() const { return m_renderHeap; }
+
+	const UINT GetRenderHeapDescriptorByteSize() { return m_descriptorByteSize; }
+
 private:
 	// 新建一个描述符堆
 	void CreateHeap(DescriptorType type, UINT allocSize);
@@ -52,7 +56,7 @@ private:
 	UINT GetDescriptorNum();
 
 private:
-	const UINT m_descriptorSize;
+	const UINT m_descriptorByteSize;
 	ID3D12Device* m_pDevice;
 	std::vector<DescriptorHeap> m_heaps;
 

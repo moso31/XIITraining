@@ -2,7 +2,7 @@
 
 DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) : 
 	m_pDevice(pDevice),
-	m_descriptorSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV))
+	m_descriptorByteSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV))
 {
 	// 创建一个 shader-visible 的描述符堆，用于渲染前每帧提交。
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -28,7 +28,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT
 
 	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_heaps[heapIdx].data->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += descriptorIdx * m_descriptorSize;
+	handle.ptr += descriptorIdx * m_descriptorByteSize;
 
 	return handle;
 }
@@ -41,7 +41,7 @@ UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const siz
 		srcHandle.ptr = cpuHandles[i];
 
 		// 计算新的 ring buffer 偏移量
-		size_t heapOffset = m_currentOffset * m_descriptorSize;
+		size_t heapOffset = m_currentOffset * m_descriptorByteSize;
 		D3D12_CPU_DESCRIPTOR_HANDLE destHandle = m_renderHeap->GetCPUDescriptorHandleForHeapStart();
 		destHandle.ptr += heapOffset;
 

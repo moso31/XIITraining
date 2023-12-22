@@ -34,6 +34,17 @@ void Material::Reprofile()
 	CreateViewsGroup();
 }
 
+void Material::Render()
+{
+	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
+
+	for (auto& pMesh : m_refMeshes)
+	{
+		pMesh->Render();
+	}
+}
+
 void Material::CreateRootSignature()
 {
 	// 创建静态采样器

@@ -15,6 +15,8 @@ public:
 	// 可以理解成连连看时的编译操作，这里做成一个显式的方法，调了这个方法就相当于点了编译按钮。
 	void Reprofile();
 
+	void Render();
+
 	void AddRefMesh(Mesh* pMesh) { m_refMeshes.push_back(pMesh); }
 	const std::vector<Mesh*>& GetSubMeshes() const { return m_refMeshes; }
 
