@@ -1,6 +1,11 @@
 #pragma once
 #include "header.h"
 
+struct CBDataMesh
+{
+	Matrix worldMatrix;
+};
+
 class Material;
 class Mesh
 {
@@ -19,6 +24,8 @@ private:
 	void CreateVB();
 	void CreateIB();
 
+	void CreateCBuffer();
+
 private:
 	std::vector<VertexPNTC> m_vertices;
 	std::vector<UINT> m_indices;
@@ -30,6 +37,9 @@ private:
 
 	bool m_rotate;
 	Vector3 m_scale;
+
+	CBDataMesh m_cbData;
+	UINT m_cbDataByteOffset;
 
 	// 本Demo中 一个网格只有一个材质
 	Material* m_pMaterial;

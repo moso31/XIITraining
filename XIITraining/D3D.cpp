@@ -3,6 +3,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "DescriptorAllocator.h"
+#include "CBufferAllocator.h"
 
 void D3D::Init()
 {
@@ -61,6 +62,10 @@ void D3D::Init()
 
 	// 创建描述符分配器
 	g_pDescriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
+	
+	// 创建 CBuffer 分配器
+	g_pCBufferAllocator = new CBufferAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
+	g_pCBufferAllocator->Init(256);
 
 	// 创建描述符堆
 	CreateDescriptorHeap();
@@ -88,7 +93,7 @@ void D3D::Init()
 	m_pMaterials.push_back(pMaterialBox);
 	m_pMaterials.push_back(pMaterialCubeMap);
 
-	CreateGlobalConstantBuffers();
+	CreateCBufferPerFrame();
 
 	// 建模型
 	m_pMesh = new Mesh();
@@ -105,10 +110,6 @@ void D3D::Init()
 	// 给模型绑材质
 	m_pMesh->SetMaterial(pMaterialBox);
 	m_pMeshCube->SetMaterial(pMaterialCubeMap);
-
-	// 暂时先使用固定的相机参数
-	g_cbObjectData.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbObjectData.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 	
 	// 初始化流程结束后，默认关闭命令列表
 	// 虽然并非官方规定，但这是一个常见实践做法。
@@ -270,35 +271,14 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
-void D3D::CreateGlobalConstantBuffers()
+void D3D::CreateCBufferPerFrame()
 {
-	// 创建全局常量缓冲区，存储MVP矩阵
-	// 对这种每帧都需要更新的，准备一个上传堆就够了，不需要准备默认堆。默认堆是给静态的玩意（比如Mesh的纹理，VBIB）使用的
-	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
+	// 暂时先使用固定的相机参数
+	m_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	m_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)) * 2);
-	g_pDevice->CreateCommittedResource(
-		&uploadHeapProp,
-		D3D12_HEAP_FLAG_NONE,
-		&cbDesc, // 资源描述
-		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为READ（允许CPU写入数据）
-		nullptr,
-		IID_PPV_ARGS(&m_pObjectCBUpload)
-	);
-	m_pObjectCBUpload->SetName(L"Object CB Upload");
-
-	auto cbvHandle = g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 2);
-
-	{
-		// 创建CBV，并放在 描述符堆 的第3、4位
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-		cbvDesc.BufferLocation = m_pObjectCBUpload->GetGPUVirtualAddress(); // 常量缓冲区的GPU虚拟地址
-		cbvDesc.SizeInBytes = D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)); // 常量缓冲区的大小
-		g_pDevice->CreateConstantBufferView(&cbvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHandle, 0, m_nCBSRUAVDescriptorSize));
-
-		cbvDesc.BufferLocation += cbvDesc.SizeInBytes; // 偏移一位
-		g_pDevice->CreateConstantBufferView(&cbvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHandle, 1, m_nCBSRUAVDescriptorSize));
-	}
+	m_cbPerFrameGPUVirtualAddress = g_pCBufferAllocator->AllocCBV(m_cbPerFrame);
+	m_cbPerFrameCPUHeapOffset ? ;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -361,6 +341,11 @@ void D3D::Draw()
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
 
+	Update();
+
+	// cbPerObject
+	g_pCommandList->SetGraphicsRootConstantBufferView(0, m_cbPerFrameGPUVirtualAddress);
+
 	RenderMeshes();
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
@@ -406,6 +391,19 @@ void D3D::FlushCommandQueue()
 	}
 }
 
+void D3D::Update()
+{
+	g_pCBufferAllocator->UpdateCBData(m_cbPerFrame, cbDataByteOffset);
+
+	for (auto& pMat : m_pMaterials)
+	{
+		for (auto& pMesh : pMat->GetSubMeshes())
+		{
+			pMesh->Update();
+		}
+	}
+}
+
 void D3D::RenderMeshes()
 {
 	// TODO：应该在更上层每帧更新cbPerCamera
@@ -427,50 +425,25 @@ void D3D::RenderMeshes()
 		for (auto& pMesh : pMat->GetSubMeshes())
 		{
 			// TODO：pMesh也应该有一个自己的根参数CBV，记录cbPerObject
-			g_pCommandList->SetGraphicsRootConstantBufferView(1, );
+			//g_pCommandList->SetGraphicsRootConstantBufferView(1, );
 		}
 	}
-
-	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
-
-	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
-
-	// World 的部分需要逐 Mesh 更新
-	void* pTransformData;
-	m_pObjectCBUpload->Map(0, nullptr, (void**)&pTransformData);
-
-	m_pMesh->Update();
-	memcpy(pTransformData, &g_cbObjectData, sizeof(MeshTransformData));
-
-	m_pMeshCube->Update();
-	memcpy(reinterpret_cast<char*>(pTransformData) + D3DUtil::CalcBufferViewSize(sizeof(MeshTransformData)), &g_cbObjectData, sizeof(MeshTransformData));
-
-	m_pObjectCBUpload->Unmap(0, nullptr);
-
-	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(pRenderHeap->GetGPUDescriptorHandleForHeapStart(), 0, m_nCBSRUAVDescriptorSize);
-	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(2, m_nCBSRUAVDescriptorSize));
-	m_pMesh->Render();
-
-	g_pCommandList->SetGraphicsRootDescriptorTable(1, gpuHandle.Offset(1, m_nCBSRUAVDescriptorSize));
-	m_pMeshCube->Render();
 }
 
 void D3D::Release()
 {
-	if (m_pMesh)
+	for (auto pMat : m_pMaterials)
 	{
-		delete m_pMesh;
-		m_pMesh = nullptr;
+		for (auto pMesh : pMat->GetSubMeshes())
+		{
+			delete pMesh;
+			pMesh = nullptr;
+		}
+
+		delete pMat;
+		pMat = nullptr;
 	}
 
 	if (m_pTextureBox) delete m_pTextureBox;
 	if (m_pTextureCubeMap) delete m_pTextureCubeMap;
-
-	if (m_pMaterialBox) delete m_pMaterialBox;
-	if (m_pMaterialCubeMap) delete m_pMaterialCubeMap;
-}
-
-UINT D3DUtil::CalcBufferViewSize(UINT sizeInBytes)
-{
-	return (sizeInBytes + 255) & ~255;
 }

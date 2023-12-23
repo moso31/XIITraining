@@ -4,11 +4,6 @@
 class Mesh;
 class Texture;
 class Material;
-class D3DUtil
-{
-public:
-	static UINT CalcBufferViewSize(UINT sizeInBytes);
-};
 
 class D3D
 {
@@ -37,9 +32,9 @@ private:
 	void CreateSwapChain();
 	void CreateDescriptorHeap();
 
-	void CreateGlobalConstantBuffers();
-	void CreateRootSignature();
+	void CreateCBufferPerFrame();
 
+	void Update();
 	void RenderMeshes();
 
 private:
@@ -70,7 +65,7 @@ private:
 
 	UINT64 m_currFenceIdx = 0;
 
-	ComPtr<ID3D12Resource> m_pObjectCBUpload;
+	ComPtr<ID3D12Resource> m_pCBPerFrame;
 
 	Mesh* m_pMesh = nullptr;
 	Mesh* m_pMeshCube = nullptr;
@@ -79,5 +74,9 @@ private:
 
 	Texture* m_pTextureBox = nullptr;
 	Texture* m_pTextureCubeMap = nullptr;
+
+	// 每帧更新的CB数据
+	CBufferPerFrame m_cbPerFrame;
+	UINT cbDataByteOffset; // 记录该数据在 CB 分配器中，分配池 内的 字节偏移量
 };
 

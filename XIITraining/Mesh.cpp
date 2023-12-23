@@ -1,5 +1,6 @@
 #include "Mesh.h"
 #include "Material.h"
+#include "CBufferAllocator.h"
 
 void Mesh::InitBox()
 {
@@ -66,6 +67,8 @@ void Mesh::InitBox()
 
 	CreateVB();
 	CreateIB();
+
+	CreateCBuffer();
 }
 
 void Mesh::CreateVB()
@@ -163,6 +166,11 @@ void Mesh::CreateIB()
 	g_pCommandList->ResourceBarrier(1, &barrier);
 }
 
+void Mesh::CreateCBuffer()
+{
+	m_cbDataByteOffset = g_pCBufferAllocator->AllocCBV(m_world);
+}
+
 void Mesh::SetScale(float x, float y, float z)
 {
 	m_scale = { x, y, z };
@@ -182,7 +190,9 @@ void Mesh::Update()
 	Matrix mx = Matrix::CreateScale(m_scale);
 	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
 
-	g_cbObjectData.m_world = mx;
+	m_cbData.worldMatrix = mx;
+
+	g_pCBufferAllocator->UpdateCBData(m_cbData, m_cbDataByteOffset);
 }
 
 void Mesh::Render()

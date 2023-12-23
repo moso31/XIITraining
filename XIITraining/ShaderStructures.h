@@ -13,9 +13,13 @@ struct VertexPNTC
 	Vector4 col = Vector4(0.0f);
 };
 
-struct MeshTransformData
+struct CBufferPerFrame
 {
-	Matrix m_world;
 	Matrix m_view;
 	Matrix m_proj;
+};
+
+struct CBufferPerObject
+{
+	Matrix m_world;
 };

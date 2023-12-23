@@ -1,33 +1,64 @@
 #pragma once
 #include "header.h"
+#include "DescriptorAllocator.h"
 
-// 每个 CBResource 视作有 RESOURCE_ELEMENT_SIZE 个 子资源 的资源池。
-// 总大小为 RESOURCE_ELEMENT_SIZE * alignByteSize 个字节.
-#define RESOURCE_ELEMENT_SIZE 131072
+// CBResource 视作有 CBUFFER_RESOURCE_ELEMENT_SIZE 个 子资源 的资源池。
+// 总大小为 CBUFFER_RESOURCE_ELEMENT_SIZE * alignedByteSize 个字节.
+#define CBUFFER_RESOURCE_ELEMENT_SIZE 131072
 
 struct CBResource
 {
-	UINT alignedByteSize;
+	UINT blockByteSize; // 单个 Block 的字节大小。该值必须是 256 的倍数
+	UINT byteOffset;
 	ID3D12Resource* pData;
 };
 
 class CBufferAllocator
 {
 public:
-	CBufferAllocator(ID3D12Device* pDevice) {}
+	CBufferAllocator(ID3D12Device* pDevice, DescriptorAllocator* pDescriptorAllocator) : 
+		m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator) {}
 	~CBufferAllocator() {}
 
-	// 创建一个CBuffer
-	void Create(const std::string& name, UINT64 byteSize);
+	// 分配 CBResource Pool。
+	// blockByteSize 代表 Pool 中 每个 Block 的 ByteSize。
+	void Init(UINT blockByteSize);
 
-	// 为一个CBuffer分配内存
-	void Alloc(const std::string& name, UINT64 allocSize);
+	// 分配一段CBV
+	template<typename T>
+	UINT AllocCBV(T& data)
+	{
+		UINT blockByteMask = m_pResource.blockByteSize - 1;
+		UINT actualBlockByteSize = sizeof(T) + blockByteMask & ~blockByteMask;
 
-private:
-	UINT CalcBufferViewSize(UINT sizeInBytes) { return (sizeInBytes + 255) & ~255; }
+		// 创建CBV
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = m_pResource.pData->GetGPUVirtualAddress() + m_pResource.byteOffset; // 常量缓冲区的GPU虚拟地址
+		cbvDesc.SizeInBytes = actualBlockByteSize;
+
+		// 分配描述符
+		auto cbvCpuHandle = m_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1);
+		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
+
+		UINT currCBDatabyteOffset = m_pResource.byteOffset;
+		m_pResource.byteOffset += actualBlockByteSize;
+
+		return currCBDatabyteOffset;
+	}
+
+	template<typename T>
+	void UpdateCBData(T& data, UINT cbDataByteOffset)
+	{
+		UINT8* pSrc;
+		HRESULT hr = m_pResource.pData->Map(0, nullptr, reinterpret_cast<void**>(&pSrc))
+
+		UINT8* pDest = pSrc + pResource.byteOffset;
+		memcpy(pDest, &data, sizeof(T));
+	}
+
 private:
 	ID3D12Device* m_pDevice;
+	DescriptorAllocator* m_pDescriptorAllocator;
 
-	// CBuffer分配器允许创建多个资源
-	std::unordered_map<std::string, CBResource> m_pResourcesMap;
+	CBResource m_pResource;
 };
