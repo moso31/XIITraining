@@ -86,9 +86,9 @@ void D3D::Init()
 	pMaterialBox->Reprofile();
 
 	auto pMaterialCubeMap = new Material();
-	pMaterialCubeMap->Load(".\\CubeMap.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
+	pMaterialCubeMap->Load(".\\Sky.fx", "VSMain", "PSMain", "vs_5_0", "ps_5_0");
 	pMaterialCubeMap->SetTexture(m_pTextureCubeMap);
-	pMaterialBox->Reprofile();
+	pMaterialCubeMap->Reprofile();
 
 	m_pMaterials.push_back(pMaterialBox);
 	m_pMaterials.push_back(pMaterialCubeMap);
@@ -274,11 +274,10 @@ void D3D::CreateDescriptorHeap()
 void D3D::CreateCBufferPerFrame()
 {
 	// 暂时先使用固定的相机参数
-	m_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	m_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
+	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	m_cbPerFrameGPUVirtualAddress = g_pCBufferAllocator->AllocCBV(m_cbPerFrame);
-	m_cbPerFrameCPUHeapOffset ? ;
+	g_cbDataByteOffset = g_pCBufferAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -306,13 +305,18 @@ void D3D::Prepare()
 
 		// 将这些 描述符 追加到 shader-visible (gpu) 的描述符堆 
 		UINT renderHeapOffset = g_pDescriptorAllocator->AppendToRenderHeap(pDescriptors, pDescriptorsSize);
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = g_pDescriptorAllocator->GetRenderHeap()->GetGPUDescriptorHandleForHeapStart();
+		gpuHandle.ptr += renderHeapOffset * g_pDescriptorAllocator->GetRenderHeapDescriptorByteSize();
 
-		pMaterial->SetShaderVisibleHeapOffset(renderHeapOffset);
+		pMaterial->SetGPUHandle(gpuHandle);
 	}
 }
 
 void D3D::Draw()
 {
+	Prepare();
+	Update();
+
 	HRESULT hr;
 	hr = g_pCommandAllocator->Reset();
 
@@ -341,12 +345,18 @@ void D3D::Draw()
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
 
-	Update();
+	{
+		g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	// cbPerObject
-	g_pCommandList->SetGraphicsRootConstantBufferView(0, m_cbPerFrameGPUVirtualAddress);
+		ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->GetRenderHeap();
+		ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
+		g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	RenderMeshes();
+		for (auto& pMat : m_pMaterials)
+		{
+			pMat->Render();
+		}
+	}
 
 	// Clear，SetRT执行完，将资源状态重置回 PRESENT
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(GetSwapChainBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -393,7 +403,7 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	g_pCBufferAllocator->UpdateCBData(m_cbPerFrame, cbDataByteOffset);
+	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{
@@ -406,28 +416,6 @@ void D3D::Update()
 
 void D3D::RenderMeshes()
 {
-	// TODO：应该在更上层每帧更新cbPerCamera
-
-	g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	ID3D12DescriptorHeap* pRenderHeap = g_pDescriptorAllocator->GetRenderHeap();
-	ID3D12DescriptorHeap* ppHeaps[] = { pRenderHeap };
-	g_pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-	for (auto& pMat : m_pMaterials)
-	{
-		// 获取在 shader-visible heap 中 的描述符偏移量
-		auto gpuHandle = pRenderHeap->GetGPUDescriptorHandleForHeapStart();
-		gpuHandle.ptr += pMat->GetShaderVisibleHeapOffset() * g_pDescriptorAllocator->GetRenderHeapDescriptorByteSize();
-
-		g_pCommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-
-		for (auto& pMesh : pMat->GetSubMeshes())
-		{
-			// TODO：pMesh也应该有一个自己的根参数CBV，记录cbPerObject
-			//g_pCommandList->SetGraphicsRootConstantBufferView(1, );
-		}
-	}
 }
 
 void D3D::Release()

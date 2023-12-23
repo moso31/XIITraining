@@ -74,9 +74,5 @@ private:
 
 	Texture* m_pTextureBox = nullptr;
 	Texture* m_pTextureCubeMap = nullptr;
-
-	// 每帧更新的CB数据
-	CBufferPerFrame m_cbPerFrame;
-	UINT cbDataByteOffset; // 记录该数据在 CB 分配器中，分配池 内的 字节偏移量
 };
 

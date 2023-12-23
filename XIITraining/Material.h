@@ -20,8 +20,8 @@ public:
 	void AddRefMesh(Mesh* pMesh) { m_refMeshes.push_back(pMesh); }
 	const std::vector<Mesh*>& GetSubMeshes() const { return m_refMeshes; }
 
-	void SetShaderVisibleHeapOffset(UINT index) { m_shaderVisibleHeapOffset = index; }
-	UINT GetShaderVisibleHeapOffset() const { return m_shaderVisibleHeapOffset; }
+	void SetGPUHandle(const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle) { m_gpuHandle = gpuHandle; }
+	const D3D12_GPU_DESCRIPTOR_HANDLE& GetGPUHandle() const { return m_gpuHandle; }
 
 	void SetTexture(Texture* pTexture) { m_pTexture = pTexture; }
 
@@ -40,7 +40,7 @@ private:
 	D3D12_ROOT_PARAMETER m_rootParameter;
 
 	// 记录 gpu-visible 描述符堆中的偏移量，每帧渲染前更新，每帧绘制材质前调用。
-	UINT m_shaderVisibleHeapOffset;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_gpuHandle;
 
 	ComPtr<ID3DBlob> m_pVSBlob;
 	ComPtr<ID3DBlob> m_pPSBlob;

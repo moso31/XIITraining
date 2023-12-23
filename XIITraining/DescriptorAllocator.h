@@ -61,5 +61,5 @@ private:
 	std::vector<DescriptorHeap> m_heaps;
 
 	ID3D12DescriptorHeap* m_renderHeap;
-	size_t m_currentOffset = 0;
+	UINT m_currentOffset = 0;
 };

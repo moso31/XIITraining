@@ -11,3 +11,7 @@ ComPtr<ID3D12GraphicsCommandList> g_pCommandList;
 
 DescriptorAllocator* g_pDescriptorAllocator;
 CBufferAllocator* g_pCBufferAllocator;
+
+CBufferPerFrame g_cbPerFrame;
+UINT g_cbDataByteOffset; 
+D3D12_GPU_VIRTUAL_ADDRESS g_cbDataGPUVirtualAddr; 

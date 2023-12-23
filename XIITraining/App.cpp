@@ -7,7 +7,6 @@ void App::Init()
 
 void App::Run()
 {
-	g_dx->Draw
 	g_dx->Draw();
 }
 

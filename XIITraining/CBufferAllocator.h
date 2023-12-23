@@ -26,10 +26,10 @@ public:
 
 	// 分配一段CBV
 	template<typename T>
-	UINT AllocCBV(T& data)
+	UINT AllocCBV(T& data, D3D12_GPU_VIRTUAL_ADDRESS& oGPUVirtualAddr)
 	{
-		UINT blockByteMask = m_pResource.blockByteSize - 1;
-		UINT actualBlockByteSize = sizeof(T) + blockByteMask & ~blockByteMask;
+		size_t blockByteMask = m_pResource.blockByteSize - 1;
+		UINT actualBlockByteSize = (UINT)((sizeof(T) + blockByteMask) & ~blockByteMask);
 
 		// 创建CBV
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
@@ -43,16 +43,18 @@ public:
 		UINT currCBDatabyteOffset = m_pResource.byteOffset;
 		m_pResource.byteOffset += actualBlockByteSize;
 
+		oGPUVirtualAddr = cbvDesc.BufferLocation;
+
 		return currCBDatabyteOffset;
 	}
-
+	 
 	template<typename T>
 	void UpdateCBData(T& data, UINT cbDataByteOffset)
 	{
 		UINT8* pSrc;
-		HRESULT hr = m_pResource.pData->Map(0, nullptr, reinterpret_cast<void**>(&pSrc))
+		HRESULT hr = m_pResource.pData->Map(0, nullptr, reinterpret_cast<void**>(&pSrc));
 
-		UINT8* pDest = pSrc + pResource.byteOffset;
+		UINT8* pDest = pSrc + cbDataByteOffset;
 		memcpy(pDest, &data, sizeof(T));
 	}
 

@@ -38,3 +38,8 @@ extern DescriptorAllocator* g_pDescriptorAllocator;
 
 // CBuffer分配器
 extern CBufferAllocator* g_pCBufferAllocator;
+
+// 每帧更新的CB数据
+extern CBufferPerFrame g_cbPerFrame;
+extern UINT g_cbDataByteOffset; // 记录该数据在 CB 分配器中，分配池 内的 字节偏移量
+extern D3D12_GPU_VIRTUAL_ADDRESS g_cbDataGPUVirtualAddr; // 记录该数据的 GPU 虚拟地址

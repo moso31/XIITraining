@@ -1,5 +1,6 @@
 #include "Material.h"
 #include "Texture.h"
+#include "Mesh.h"
 
 void Material::Load(const std::filesystem::path& shaderPath, const std::string& vsEntry, const std::string& psEntry, const std::string& vsTarget, const std::string& psTarget)
 {
@@ -29,15 +30,21 @@ void Material::Load(const std::filesystem::path& shaderPath, const std::string& 
 
 void Material::Reprofile()
 {
+	CreateViewsGroup();
 	CreateRootSignature();
 	CreatePSO();
-	CreateViewsGroup();
 }
 
 void Material::Render()
 {
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
+
+	// cbPerFrame
+	g_pCommandList->SetGraphicsRootConstantBufferView(0, g_cbDataGPUVirtualAddr);
+
+	// cbOfMaterial
+	g_pCommandList->SetGraphicsRootDescriptorTable(2, m_gpuHandle);
 
 	for (auto& pMesh : m_refMeshes)
 	{
@@ -49,7 +56,7 @@ void Material::CreateRootSignature()
 {
 	// 创建静态采样器
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-	samplerDesc.ShaderRegister = 0; // HLSL中的寄存器号 = s0
+	samplerDesc.ShaderRegister = 0; // HLSL中的寄存器号 (s0)
 	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // 只在像素着色器中可见
 	samplerDesc.RegisterSpace = 0;
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -65,18 +72,21 @@ void Material::CreateRootSignature()
 
 	std::vector<D3D12_STATIC_SAMPLER_DESC> pSamplers = { samplerDesc };
 
-	CD3DX12_ROOT_PARAMETER rootParam[2];
+	// 此材质使用一个长度为1 的描述符表，表中只有一个SRV，表示当前材质使用的纹理。
+	CD3DX12_ROOT_PARAMETER rootParam[3];
 	{
+		rootParam[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // cbPerFrame, b0
+		rootParam[1].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // cbPerObject, b1
+
+		// material textures, t0...tn，但我只用了 t0
 		CD3DX12_DESCRIPTOR_RANGE range[1];
-		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0); // 1个SRV，slot 0~1，space0
-		rootParam[0].InitAsDescriptorTable(_countof(range), range);
+		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0); // 1个SRV，slot 0，space0
+		rootParam[2].InitAsDescriptorTable(_countof(range), range);
+
+		// TODO: material params, b3...
 	}
-	{
-		CD3DX12_DESCRIPTOR_RANGE range[1];
-		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0); // 1个CBV，slot 0，space0
-		rootParam[1].InitAsDescriptorTable(_countof(range), range);
-	}
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, (UINT)pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
 	HRESULT hr;

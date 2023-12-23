@@ -9,7 +9,7 @@ cbuffer cbObject : register(b1)
 	matrix m_world;
 }
 
-Texture2D txAlbedo : register(t0);
+TextureCube txCube : register(t0);
 SamplerState ssLinear : register(s0);
 
 struct VertexIn
@@ -45,5 +45,5 @@ VertexOut VSMain(VertexIn vin)
 
 float4 PSMain(VertexOut pin) : SV_TARGET
 {
-	return txAlbedo.Sample(ssLinear, pin.uv);
+	return txCube.SampleLevel(ssLinear, pin.inPos.xyz, 4.0);
 }

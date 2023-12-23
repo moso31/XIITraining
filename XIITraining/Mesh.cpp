@@ -168,7 +168,7 @@ void Mesh::CreateIB()
 
 void Mesh::CreateCBuffer()
 {
-	m_cbDataByteOffset = g_pCBufferAllocator->AllocCBV(m_world);
+	m_cbDataByteOffset = g_pCBufferAllocator->AllocCBV(m_cbData, m_cbDataGPUVirtualAddr);
 }
 
 void Mesh::SetScale(float x, float y, float z)
@@ -185,7 +185,7 @@ void Mesh::SetMaterial(Material* pMaterial)
 void Mesh::Update()
 {
 	static float r = 0.0f;
-	r += 0.0025;
+	r += 0.0025f;
 
 	Matrix mx = Matrix::CreateScale(m_scale);
 	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
@@ -197,6 +197,9 @@ void Mesh::Update()
 
 void Mesh::Render()
 {
+	// cbPerObject
+	g_pCommandList->SetGraphicsRootConstantBufferView(1, m_cbDataGPUVirtualAddr);
+
 	D3D12_VERTEX_BUFFER_VIEW vbv;
 	vbv.BufferLocation = m_pVB->GetGPUVirtualAddress();
 	vbv.StrideInBytes = sizeof(VertexPNTC); // 每个顶点的大小

@@ -41,7 +41,7 @@ UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const siz
 		srcHandle.ptr = cpuHandles[i];
 
 		// 计算新的 ring buffer 偏移量
-		size_t heapOffset = m_currentOffset * m_descriptorByteSize;
+		UINT heapOffset = m_currentOffset * m_descriptorByteSize;
 		D3D12_CPU_DESCRIPTOR_HANDLE destHandle = m_renderHeap->GetCPUDescriptorHandleForHeapStart();
 		destHandle.ptr += heapOffset;
 
