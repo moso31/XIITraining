@@ -65,7 +65,6 @@ void D3D::Init()
 	
 	// 创建 CBuffer 分配器
 	g_pCBufferAllocator = new CBufferAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
-	g_pCBufferAllocator->Init(256);
 
 	// 创建描述符堆
 	CreateDescriptorHeap();
@@ -277,7 +276,7 @@ void D3D::CreateCBufferPerFrame()
 	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
 	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	g_cbDataByteOffset = g_pCBufferAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr);
+	g_pCBufferAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -403,7 +402,7 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataByteOffset);
+	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{

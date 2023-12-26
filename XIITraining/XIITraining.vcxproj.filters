@@ -21,6 +21,7 @@
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="CBufferAllocator.h" />
+    <ClInclude Include="XAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Color.fx" />

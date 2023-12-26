@@ -153,6 +153,7 @@
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Texture.h" />
+    <ClInclude Include="XAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Color.fx">

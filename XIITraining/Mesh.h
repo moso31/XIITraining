@@ -40,6 +40,7 @@ private:
 
 	CBDataMesh m_cbData;
 	UINT m_cbDataByteOffset;
+	UINT m_cbDataCBufferPageIndex;
 	D3D12_GPU_VIRTUAL_ADDRESS m_cbDataGPUVirtualAddr;
 
 	// 本Demo中 一个网格只有一个材质

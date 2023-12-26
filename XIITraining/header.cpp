@@ -14,4 +14,5 @@ CBufferAllocator* g_pCBufferAllocator;
 
 CBufferPerFrame g_cbPerFrame;
 UINT g_cbDataByteOffset; 
+UINT g_cbDataCBufferPageIndex;
 D3D12_GPU_VIRTUAL_ADDRESS g_cbDataGPUVirtualAddr; 

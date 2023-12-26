@@ -13,24 +13,125 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) :
 	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_renderHeap));
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT allocSize)
-{
-	UINT heapIdx, descriptorIdx;
+//D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT allocSize)
+//{
+//	UINT heapIdx, descriptorIdx;
+//
+//	// 检查当前所有对应类型的堆中是否还有可用空间，有的话记录是 哪个堆（heapIdx）的 哪个描述符段（descriptorIdx）
+//	if (!CheckAllocable(type, allocSize, heapIdx, descriptorIdx))
+//	{
+//		// 没有可用空间，创建一个新的堆
+//		heapIdx = (UINT)m_heaps.size();
+//		descriptorIdx = 0;
+//		CreateHeap(type, allocSize);
+//	}
+//
+//	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
+//	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_heaps[heapIdx].data->GetCPUDescriptorHandleForHeapStart();
+//	handle.ptr += descriptorIdx * m_descriptorByteSize;
+//
+//	return handle;
+//}
 
-	// 检查当前所有对应类型的堆中是否还有可用空间，有的话记录是 哪个堆（heapIdx）的 哪个描述符段（descriptorIdx）
-	if (!CheckAllocable(type, allocSize, heapIdx, descriptorIdx))
+// 分配一个大小为 size 的内存块
+// size: 要分配的内存块的大小
+// oPageIdx: 分配到的页的下标
+// oFirstIdx: 分配到的页中的第一个内存块的下标
+bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle)
+{
+	if (size > m_eachPageDataNum) return false;
+
+	for (UINT i = 0; i < (UINT)m_pages.size(); i++)
 	{
-		// 没有可用空间，创建一个新的堆
-		heapIdx = (UINT)m_heaps.size();
-		descriptorIdx = 0;
-		CreateHeap(type, allocSize);
+		auto& page = m_pages[i];
+		if (page.type != type) continue;
+
+		for (auto& space : page.freeIntervals)
+		{
+			if (space.ed - space.st + 1 >= size && space.st + size <= m_eachPageDataNum)
+			{
+				// 如果找到合适的空闲内存
+				if (space.st + size <= space.ed)
+					page.freeIntervals.insert({ space.st + size, space.ed });
+
+				page.freeIntervals.erase(space);
+
+				oPageIdx = i;
+				oFirstIdx = space.st;
+
+				oHandle = page.data->GetCPUDescriptorHandleForHeapStart();
+				oHandle.ptr += oFirstIdx * m_descriptorByteSize;
+				return true;
+			}
+		}
 	}
 
-	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_heaps[heapIdx].data->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += descriptorIdx * m_descriptorByteSize;
+	// 如果已经达到了最大页数，无法再分配
+	if (m_pages.size() >= m_pageNumLimit) return false;
 
-	return handle;
+	// 如果没有找到合适的空闲内存，需要新分配一页
+	auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
+	oPageIdx = (UINT)m_pages.size() - 1;
+	oFirstIdx = 0;
+	oHandle = newPage.data->GetCPUDescriptorHandleForHeapStart();
+	return true;
+}
+
+void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
+{
+	auto& freeIntervals = m_pages[pageIdx].freeIntervals;
+
+	UINT end = min(start + size - 1, m_eachPageDataNum - 1);
+
+	AllocatorRangeInterval adjust(start, end);
+	std::set<AllocatorRangeInterval> removing;
+	for (auto& space : freeIntervals)
+	{
+		bool bCombine = false;
+		if (space.st >= start && space.ed <= end)
+		{
+			// 如果 space 是子集，删除
+			removing.insert(space);
+		}
+		else if (space.st <= end && start <= space.ed)
+		{
+			// 如果 space 是交集，合并
+			removing.insert(space);
+			bCombine = true;
+		}
+		else if (space.st < start || space.ed > end)
+		{
+			// 如果 space 是父集，什么都不做
+		}
+		else bCombine = true;
+
+		if (bCombine)
+		{
+			adjust.st = min(adjust.st, space.st);
+			adjust.ed = max(adjust.ed, space.ed);
+		}
+	}
+
+	for (auto& space : removing) freeIntervals.erase(space);
+
+	// 如果 adjust 和 m_freeInterval 形成连号，需要再合并一次。
+	removing.clear();
+	for (auto& space : freeIntervals)
+	{
+		if (space.st == adjust.ed + 1)
+		{
+			adjust.ed = space.ed;
+			removing.insert(space);
+		}
+		else if (space.ed == adjust.st - 1)
+		{
+			adjust.st = space.st;
+			removing.insert(space);
+		}
+	}
+
+	freeIntervals.insert(adjust);
+	for (auto& space : removing) freeIntervals.erase(space);
 }
 
 UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
@@ -55,67 +156,4 @@ UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const siz
 	}
 
 	return firstOffsetIndex;
-}
-
-void DescriptorAllocator::CreateHeap(DescriptorType type, UINT allocSize)
-{
-	DescriptorHeap newHeap;
-
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // cpu heap, 默认 FLAG_NONE = non-shader-visible.
-	desc.NodeMask = 0;
-	desc.NumDescriptors = DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT; 
-	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 此 allocator 只支持 CBVSRVUAV 这一种类型.
-
-	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&newHeap.data));
-	newHeap.type = type;
-
-	// 初始化 allocMap
-	memset(newHeap.allocMap, 0, sizeof(bool) * DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT);
-	memset(newHeap.allocMap, 1, sizeof(bool) * allocSize);
-	newHeap.allocatedSize = allocSize;
-
-	m_heaps.push_back(newHeap);
-}
-
-bool DescriptorAllocator::CheckAllocable(DescriptorType type, UINT allocSize, UINT& oHeapIdx, UINT& oDescriptorIdx)
-{
-	for (UINT heapIdx = 0; heapIdx < m_heaps.size(); heapIdx++)
-	{
-		auto& heap = m_heaps[heapIdx];
-		if (heap.type != type) continue;
-
-		const auto& heapDesc = heap.data->GetDesc();
-
-		// 遍历整个堆寻找其中是否还有大小为 allocSize 的空间
-		auto p = heap.data->GetCPUDescriptorHandleForHeapStart();
-		UINT idx = 0;
-		while (idx < heapDesc.NumDescriptors)
-		{
-			if (!heap.allocMap[idx])
-			{
-				UINT i = idx;
-				while (i - idx != allocSize && !heap.allocMap[i]) i++;
-				if (i - idx == allocSize)
-				{
-					// 找到了 allocSize 大小的空间，将其标记为已分配
-					for (UINT j = idx; j < i; j++) heap.allocMap[j] = true;
-					oHeapIdx = heapIdx;
-					oDescriptorIdx = idx;
-					heap.allocatedSize += allocSize;
-					return true;
-				}
-				else idx = i + 1;
-			}
-			else idx++;
-		}
-	}
-	return false;
-}
-
-UINT DescriptorAllocator::GetDescriptorNum()
-{
-	UINT result = 0;
-	for (auto& heap : m_heaps) result += heap.allocatedSize;
-	return result;
 }
