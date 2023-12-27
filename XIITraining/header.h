@@ -27,6 +27,8 @@ extern HWND g_hWnd;
 class D3D;
 extern D3D* g_dx;
 
+extern ComPtr<ID3D12Debug> g_debugController;
+
 // 我的 Win10 版本不是最新的，只支持到 Device8
 extern ComPtr<ID3D12Device8> g_pDevice;
 

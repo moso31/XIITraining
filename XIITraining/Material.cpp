@@ -74,17 +74,15 @@ void Material::CreateRootSignature()
 
 	// 此材质使用一个长度为1 的描述符表，表中只有一个SRV，表示当前材质使用的纹理。
 	CD3DX12_ROOT_PARAMETER rootParam[3];
-	{
-		rootParam[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // cbPerFrame, b0
-		rootParam[1].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // cbPerObject, b1
+	rootParam[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL); // cbPerFrame, b0
+	rootParam[1].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_ALL); // cbPerObject, b1
 
-		// material textures, t0...tn，但我只用了 t0
-		CD3DX12_DESCRIPTOR_RANGE range[1];
-		range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0); // 1个SRV，slot 0，space0
-		rootParam[2].InitAsDescriptorTable(_countof(range), range);
+	// material textures, t0...tn，但我只用了 t0
+	CD3DX12_DESCRIPTOR_RANGE range[1];
+	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0); // 1个SRV，slot 0，space0
+	rootParam[2].InitAsDescriptorTable(_countof(range), range);
 
-		// TODO: material params, b3...
-	}
+	// TODO: material params, b3...
 
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, (UINT)pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 

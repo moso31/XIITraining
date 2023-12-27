@@ -3,6 +3,7 @@
 HWND g_hWnd = nullptr;
 D3D* g_dx = nullptr;
 
+ComPtr<ID3D12Debug> g_debugController;
 ComPtr<ID3D12Device8> g_pDevice;
 
 ComPtr<ID3D12CommandQueue> g_pCommandQueue; 

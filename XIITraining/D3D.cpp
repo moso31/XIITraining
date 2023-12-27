@@ -8,11 +8,8 @@
 void D3D::Init()
 {
 	// ∆Ù”√ D3D12 µ˜ ‘≤„
-//#if defined(DEBUG) || defined(_DEBUG)
-	ComPtr<ID3D12Debug> debugController;
-	D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
-	debugController->EnableDebugLayer();
-//#endif
+	D3D12GetDebugInterface(IID_PPV_ARGS(&g_debugController));
+	g_debugController->EnableDebugLayer();
 
 	HRESULT hr;
 
