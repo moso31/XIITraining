@@ -87,7 +87,7 @@ void Material::Render()
 }
 ```
 
-### 2.3. CBuffer 分配器（有待完善）
+### 2.3. CBuffer 分配器
 
 CBuffer分配器类`CBufferAllocator`，结构上可以看做是一个按页存储的若干页CBuffer的集合。
 
