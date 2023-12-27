@@ -33,7 +33,7 @@ DescriptorAllocator 是描述符分配器，主要负责分配描述符。
 
 在管理结构上，分为两个部分：按页存储的若干CPU描述符堆 `DescriptorAllocator::m_pages`，和GPU可见的描述符堆 DescriptorAllocator::m_renderHeap。
 
-这两个堆每帧会在更新前，`D3D::Prepare()`方法中，将 CPU 描述符堆中需要渲染的那些描述符找出来，然后映射GPU可见的描述符堆上。
+每帧的`D3D::Prepare()`方法中，将`m_pages`中需要渲染的那些描述符找出来，然后映射到GPU可见的`m_renderHeap`上。
 
 #### 描述符分配器的实际使用
 
@@ -41,17 +41,15 @@ DescriptorAllocator 是描述符分配器，主要负责分配描述符。
 
 首先，在创建纹理的时候，通过 `Texture::AddSRV()` 方法，为纹理创建对应的 SRV。描述符分配器会负责分配一个 CPU 可见的 SRV，并存到 `DescriptorAllocator::m_heaps` 上。
 
-然后，创建材质并编译。在这个 Demo 中，可以通过调用 `Materials::Reprofile()` 方法，模拟在游戏中的材质 “编译” 的过程。
+然后，创建材质并编译。在这个 Demo 中，`Materials::Reprofile()` 类似在游戏中的材质 “编译” 的过程。
 
 编译时，通过 `Material::CreateViewsGroup()` 方法，重新构建材质依赖的描述符。比如，如果材质在设计上依赖了多张纹理，这个时候就会获取这些 **纹理的SRV** 在 **描述符分配器** 上的 **CPU描述符**。为了方便渲染时调用，材质依赖的描述符会以数组的形式，存储到 `Material::m_viewsGroup` 中。
 
-每帧渲染前，遍历这些映射关系。最终，调用 `DescriptorAllocator::AppendToRenderHeap()` 映射到 GPU 描述符堆上即可。
+每帧渲染前（`D3D::Prepare`时），按遍历顺序，将每个材质的 `m_viewsGroup` 映射到 GPU 描述符堆上。
 
 大致的结构如图所示：![image](https://github.com/moso31/XIITraining/assets/15684115/5be328f4-1fc2-4c2e-84fa-aac9a13a66c6)
 
-> 注意，每个材质依赖的shader代码中，SRV 寄存器（register(s0);） 的顺序，一定要和自己的`m_viewsGroup`记录的CPU描述符的映射关系的顺序一致。
-
-然后，记录其在 GPU 描述符堆上的 首个GPU句柄 即可。
+> 调用`CreateViewsGroup()`方法时需要注意，每个材质依赖的shader代码中，SRV 寄存器（register(s0);） 的顺序，一定要和`m_viewsGroup`记录的CPU描述符的映射关系的顺序一致，不然 SRV 的加载顺序会乱。
 
 每帧渲染时的流程大致如下：
 
@@ -73,7 +71,7 @@ void D3D::Prepare()
 }
 ```
 
-等之后渲染时，这个 GPU句柄 是 DX12的命令列表 可以直接使用的：
+每个材质会获得其在 GPU 描述符堆 `DescriptorAllocator::m_renderHeap` 上的 首个地址的句柄 `gpuHandle`。每帧渲染时，让描述符表使用这个 `gpuHandle` 即可：
 
 ```C++
 void Material::Render()
