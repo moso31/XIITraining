@@ -91,8 +91,6 @@ void Material::Render()
 
 ### 2.3. CBuffer 分配器（有待完善）
 
-> CBuffer分配器 和上面的 描述符分配器 的实现思路，主要受这个讨论：https://www.gamedev.net/forums/topic/708811-d3d12-best-approach-to-manage-constant-buffer-for-the-frame/ ，ddlox 提到的 'paging method' 的启发。
-
 CBuffer分配器类`CBufferAllocator`，结构上可以看做是一个按页存储的若干页CBuffer的集合。
 
 该类中使用 `CBufferAllocator::m_pages` 管理这些页面。可以将其中每单个 `m_pages[i]` 都看成一个资源池。
@@ -130,6 +128,9 @@ void UpdateCBData(T& data, UINT cbDataByteOffset)
 	memcpy(pDest, &data, sizeof(T));
 }
 ```
+
+
+> p.s.: CBuffer分配器 和上面的 描述符分配器 的实现思路，主要受这个讨论：https://www.gamedev.net/forums/topic/708811-d3d12-best-approach-to-manage-constant-buffer-for-the-frame/ ，ddlox 提到的 'paging method' 的启发。
 
 ### 2.4 其它
 
