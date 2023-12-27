@@ -71,10 +71,6 @@ void D3D::Init()
 	m_pMeshCube->SetMaterial(pMaterialCubeMap);
 	
 	// 初始化流程结束后，默认关闭命令列表
-	// 虽然并非官方规定，但这是一个常见实践做法。
-	// 初始关闭命令列表，需要用这个列表的时候，使用 Reset 重新打开它，然后再记录新的命令。
-	// 这样可以避免 CommandList 在后续操作中被其它逻辑掺入命令，导致渲染错误。
-	// 要跳过Close，除非你对这个命令列表之后的调用逻辑非常明确。但是，何必呢？
 	g_pCommandList->Close();
 
 	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
