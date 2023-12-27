@@ -84,6 +84,7 @@ void Material::CreateRootSignature()
 
 	// TODO: material params, b3...
 
+	// 根参数准备好，就可以创建根描述符了
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(_countof(rootParam), rootParam, (UINT)pSamplers.size(), pSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
