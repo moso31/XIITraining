@@ -27,23 +27,13 @@
 
 相关资料网络上已经很多，不再赘述。
 
-### 2.2. 描述符分配器（CBufferAllocator）
+### 2.2. 描述符分配器（DescriptorAllocator）
 
-CBufferAllocator 是描述符分配器，主要负责对场景内的。。。
+DescriptorAllocator 是描述符分配器，主要负责分配描述符。
 
-#### 一个是 CPU 描述符堆集：`m_heaps`。
+在管理结构上，分为两个部分：按页存储的若干CPU描述符堆 `DescriptorAllocator::m_pages`，和GPU可见的描述符堆 DescriptorAllocator::m_renderHeap。
 
-`m_heaps` 负责存储记录用到的描述符。说的更简单一点就是，当你给纹理资源创建 SRV 的时候，就在 `m_heaps` 同步注册一个 SRV；当你的 Mesh 初始化分配 CB 数据（用来存世界矩阵之类的东西）的时候，就在 `m_heaps` 注册一个 CBV。
-
-> 受 DX API 限制，描述符堆数量有上限，所以需要使用数组的形式存储，以防到达上限。
-
-> 目前我按个人直觉，规定了其中每个描述符堆是单类型的，即一个描述符堆只能存储 CBV/SRV/UAV 中的一种（但我不确定这是否有必要）。
-
-#### 另一个是 GPU 描述符堆：`m_renderHeaps`
-
-和 `m_heaps` 的主要区别在于，`m_renderHeaps` 是 GPU 可见的。只有 GPU 可见的描述符堆，才能被绑定到 DX12 的根签名。
-
-每帧渲染开始之前，会通过 `DescriptorAllocator::AppendToRenderHeap()` 方法，将本帧用到的 CPU 的描述符从 `m_heaps` 里抽出来，拷贝到 `m_renderHeaps` 里。
+这两个堆每帧会在更新前，`D3D::Prepare()`方法中，将 CPU 描述符堆中需要渲染的那些描述符找出来，然后映射GPU可见的描述符堆上。
 
 #### 描述符分配器的实际使用
 
@@ -101,17 +91,35 @@ void Material::Render()
 
 ### 2.3. CBuffer 分配器（有待完善）
 
-> 更完善的 CBuffer 分配器应该考虑进一步的动态管理：https://www.gamedev.net/forums/topic/708811-d3d12-best-approach-to-manage-constant-buffer-for-the-frame/
+> CBuffer分配器 和上面的 描述符分配器 的实现思路，主要受这个讨论：https://www.gamedev.net/forums/topic/708811-d3d12-best-approach-to-manage-constant-buffer-for-the-frame/ ，ddlox 提到的 'paging method' 的启发。
 
-> 我的实现目前是个简易版本，相当于只实现了上述帖子中的 "large buffer method"。
+CBuffer分配器类`CBufferAllocator`，结构上可以看做是一个按页存储的若干页CBuffer的集合。
 
-CBuffer分配器类`CBufferAllocator`，在概念上可以理解成使用一个超大的 CB，一个资源池。
+该类中使用 `CBufferAllocator::m_pages` 管理这些页面。可以将其中每单个 `m_pages[i]` 都看成一个资源池。
 
-在初始化阶段，通过`Init()`，这个超大的CB其实就准备好了。剩下的其实只是根据渲染场景的情况，往这个大的资源池里分配CBV，并通过在 Mesh 中记录 CBV 字节偏移量（`m_cbDataByteOffset`）的方法，记录这个 CBV 是哪个 Mesh 的。
+当调用 AllocCBV() 时，会自动根据输入的 `T& data` 类型，在已经分配的页面里寻找是否有新的页面。如果没有，就再创建一个新的页面。
 
-渲染时，在 `Mesh::Update()` 方法遍历更新每个 Mesh 的时候，就可以通过 Mesh 所记录的字节偏移量`m_cbDataByteOffset`，通过`memcpy()`，刷新 超大CB中 对应当前mesh的部分的值：
+每个页对应的 ID3D12Resource 都以 上传堆 的形式创建，若调用 AllocCBV() 且分配成功，就会返回对应的 D3D12_GPU_VIRTUAL_ADDRESS 虚拟地址，以及这段资源具体位于哪个页面的哪段字节。
+
+这样每帧渲染时，就可以通过这些信息寻址，实现对 GPU 上的数据（比如MVP矩阵）的更新：
 
 ```C++
+
+// Mesh.cpp
+void Mesh::Update()
+{
+	static float r = 0.0f;
+	r += 0.0025f;
+
+	Matrix mx = Matrix::CreateScale(m_scale);
+	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
+
+	m_cbData.worldMatrix = mx;
+
+	g_pCBufferAllocator->UpdateCBData(m_cbData, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
+}
+
+// CBufferAllocator.h
 template<typename T>
 void UpdateCBData(T& data, UINT cbDataByteOffset)
 {
@@ -120,27 +128,6 @@ void UpdateCBData(T& data, UINT cbDataByteOffset)
 
 	UINT8* pDest = pSrc + cbDataByteOffset;
 	memcpy(pDest, &data, sizeof(T));
-}
-```
-
-#### CBuffer分配器的实际使用
-
-其实只需要理解两件事：CBV 是什么时候分配的，每个CBV对应的CBData是怎么更新的。
-
-在这个小框架中，需要 CBV 的地方目前只有两处：每帧更新的 cbPerFrame（相机的VP矩阵），和每个Obj独立更新的cbPerObject（Mesh的世界矩阵）。
-
-在每个Mesh自己初始化的时候，就通过 `Mesh::CreateCBuffer()` 方法，在CBuffer分配器中，创建了自己的 CBV，并
-- 通过 `Mesh::m_cbDataByteOffset` 确定了该CBV在资源池中的字节偏移量
-- 通过 `Mesh::m_cbDataGPUVirtualAddr` 确定了该CBV在GPU上的虚拟地址
-
-渲染时，只需要将 GPU 上的虚拟地址指向想要设置的 根描述符 上即可：
-```C++
-void Mesh::Render()
-{
-	// cbPerObject
-	g_pCommandList->SetGraphicsRootConstantBufferView(1, m_cbDataGPUVirtualAddr);
-
-	... 其它省略
 }
 ```
 
