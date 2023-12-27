@@ -134,3 +134,17 @@ void UpdateCBData(T& data, UINT cbDataByteOffset)
 ### 2.4 其它
 
 相对上述内容的顶层调用而已，并不是核心内容。略了。
+
+## 3. 效果
+
+最终效果并不复杂，但概念相对比较完整：
+
+首先创建两张纹理，一个 2d，一个 cube。
+
+然后创建了两个材质，一个材质中连 2d 纹理，另一张连 Cube 纹理，采样方法不同，所以使用了两个不同的 Shader。
+
+最后创建两个Mesh，并将材质绑到模型上。
+
+这个Demo主要是我自己想捋一下，应该如何设计一套方法来手动管理 CBV 和 SRV。
+
+![image](https://github.com/moso31/XIITraining/assets/15684115/af600d44-193b-4681-9e15-ac6bf0120f3f)
