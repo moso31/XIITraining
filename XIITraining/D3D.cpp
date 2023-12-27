@@ -7,49 +7,14 @@
 
 void D3D::Init()
 {
+#if (DEBUG) || (_DEBUG)
 	// 启用 D3D12 调试层
 	D3D12GetDebugInterface(IID_PPV_ARGS(&g_debugController));
 	g_debugController->EnableDebugLayer();
+#endif
 
-	HRESULT hr;
-
-	// 创建 DXGI 工厂
-	hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&m_pDXGIFactory));
-
-	// 从 DXGI 工厂中 枚举第一个适配器（默认的显卡）
-	ComPtr<IDXGIAdapter1> pAdapter;
-	m_pDXGIFactory->EnumAdapters1(0, &pAdapter);
-
-	// 转换成 IDXGIAdapter4。
-	// IDXGIAdapter 是最初始版本，不推荐使用；
-	// IDXGIAdapter1：允许访问显卡的供应商ID、设备ID、子系统ID等。
-	// IDXGIAdapter2：允许对显卡进行功耗管理；
-	// IDXGIAdapter3：进一步增加了对显存使用情况的查询功能。
-	// IDXGIAdapter4 提供了对 GPU 更高级别的控制和监视。特别是对硬件性能数据的访问。
-	ComPtr<IDXGIAdapter4> pAdapter4;
-	hr = pAdapter.As(&pAdapter4);
-
-	// 创建 D3D12 设备
-	// ID3D12Device 也分成若干版本，由于版本太多了，挑最主要的说：
-	// 从 ID3D12Device4 开始，增加了对光线追踪功能的接口支持。
-	// 越老的版本兼容性和稳定性越强。自己酌情选择。
-	hr = D3D12CreateDevice(pAdapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&g_pDevice));
-
-	// 创建 Fence 用于同步 CPU 和 GPU 的操作。
-	hr = g_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence));
-
-	// 获取 描述符堆 的 句柄增量大小。
-	// 句柄增量大小：是 DX12 的新概念。在 DX12 中，使用 描述符堆 存储 描述符。
-	// 目前 DX12 的最新版本，分成了四个类型的堆：RTV，DSV，Sampler，CBV/SRV/UAV。
-	// 举个例子，假设我们有一个 DSV描述符堆，里面全是 DSV描述符。
-	// 现在我们想要这个堆中的第3个描述符，于是首先需要调用下面的方法，获取 DSVDescriptorSize，例如 = 32
-	// 那么该描述符在堆中的起始字节就是 32 * 3 = 96。
-	// note：DX12中，一个描述符堆下的所有 描述符 类型一致。不会出现 DSV/RTV/XX... 混在一个堆里的情况。
-	// 作为初学者，可以先不管它们的含义是什么。先把获取大小、字节偏移的概念理解就好。
-	m_nRTVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	m_nDSVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	m_nSamplerDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-	m_nCBSRUAVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	// 创建DX12设备
+	CreateDevice();
 
 	// 创建命令队列、命令分配器、命令列表
 	CreateCommandObjects();
@@ -63,8 +28,8 @@ void D3D::Init()
 	// 创建 CBuffer 分配器
 	g_pCBufferAllocator = new CBufferAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
 
-	// 创建描述符堆
-	CreateDescriptorHeap();
+	// 分配 CBPerFrame（现在里面只有相机的VP矩阵）
+	AllocCBufferPerFrame();
 
 	// 创建实际应用到Mesh上的纹理资源
 	m_pTextureBox = new Texture();
@@ -88,8 +53,6 @@ void D3D::Init()
 
 	m_pMaterials.push_back(pMaterialBox);
 	m_pMaterials.push_back(pMaterialCubeMap);
-
-	CreateCBufferPerFrame();
 
 	// 建模型
 	m_pMesh = new Mesh();
@@ -118,6 +81,47 @@ void D3D::Init()
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
 	FlushCommandQueue();
+}
+
+void D3D::CreateDevice()
+{
+	// 创建 DXGI 工厂
+	HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&m_pDXGIFactory));
+
+	// 从 DXGI 工厂中 枚举第一个适配器（默认的显卡）
+	ComPtr<IDXGIAdapter1> pAdapter;
+	m_pDXGIFactory->EnumAdapters1(0, &pAdapter);
+
+	// 转换成 IDXGIAdapter4。
+	// IDXGIAdapter 是最初始版本，不推荐使用；
+	// IDXGIAdapter1：允许访问显卡的供应商ID、设备ID、子系统ID等。
+	// IDXGIAdapter2：允许对显卡进行功耗管理；
+	// IDXGIAdapter3：进一步增加了对显存使用情况的查询功能。
+	// IDXGIAdapter4 提供了对 GPU 更高级别的控制和监视。特别是对硬件性能数据的访问。
+	ComPtr<IDXGIAdapter4> pAdapter4;
+	hr = pAdapter.As(&pAdapter4);
+
+	// 创建 D3D12 设备
+	// ID3D12Device 也分成若干版本，由于版本太多了，挑最主要的说：
+	// 从 ID3D12Device4 开始，增加了对光线追踪功能的接口支持。
+	// 越老的版本兼容性和稳定性越强。自己酌情选择。
+	hr = D3D12CreateDevice(pAdapter4.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&g_pDevice));
+
+	// 创建 Fence 用于同步 CPU 和 GPU 的操作。
+	hr = g_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence));
+
+	// 获取 描述符堆 的 句柄增量大小。
+	// 句柄增量大小：是 DX12 的新概念。在 DX12 中，使用 描述符堆 存储 描述符。
+	// 目前 DX12 的最新版本，分成了四个类型的堆：RTV，DSV，Sampler，CBV/SRV/UAV。
+	// 举个例子，假设我们有一个 DSV描述符堆，里面全是 DSV描述符。
+	// 现在我们想要这个堆中的第3个描述符，于是首先需要调用下面的方法，获取 DSVDescriptorSize，例如 = 32
+	// 那么该描述符在堆中的起始字节就是 32 * 3 = 96。
+	// note：DX12中，一个描述符堆下的所有 描述符 类型一致。不会出现 DSV/RTV/XX... 混在一个堆里的情况。
+	// 作为初学者，可以先不管它们的含义是什么。先把获取大小、字节偏移的概念理解就好。
+	m_nRTVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_nDSVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+	m_nSamplerDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	m_nCBSRUAVDescriptorSize = g_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 void D3D::CreateCommandObjects()
@@ -169,9 +173,12 @@ void D3D::CreateSwapChain()
 	ComPtr<IDXGISwapChain> pSwapChain;
 	hr = m_pDXGIFactory->CreateSwapChain(g_pCommandQueue.Get(), &swapChainDesc, &pSwapChain);
 	hr = pSwapChain.As(&m_pSwapChain);
+
+	// 创建交换链专用的RTV/DSV描述符堆。
+	CreateDescriptorHeapForSwapChain();
 }
 
-void D3D::CreateDescriptorHeap()
+void D3D::CreateDescriptorHeapForSwapChain()
 {
 	D3D12_DESCRIPTOR_HEAP_DESC RTVHeapDesc;
 	RTVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
@@ -267,7 +274,7 @@ void D3D::CreateDescriptorHeap()
 	g_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, dsvHandle);
 }
 
-void D3D::CreateCBufferPerFrame()
+void D3D::AllocCBufferPerFrame()
 {
 	// 暂时先使用固定的相机参数
 	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
@@ -410,10 +417,6 @@ void D3D::Update()
 			pMesh->Update();
 		}
 	}
-}
-
-void D3D::RenderMeshes()
-{
 }
 
 void D3D::Release()

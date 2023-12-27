@@ -28,14 +28,14 @@ public:
 private:
 	ID3D12Resource* GetSwapChainBackBuffer() const;
 
+	void CreateDevice();
 	void CreateCommandObjects();
 	void CreateSwapChain();
-	void CreateDescriptorHeap();
+	void CreateDescriptorHeapForSwapChain();
 
-	void CreateCBufferPerFrame();
+	void AllocCBufferPerFrame();
 
 	void Update();
-	void RenderMeshes();
 
 private:
 	ComPtr<IDXGIFactory7> m_pDXGIFactory;
@@ -55,7 +55,7 @@ private:
 	ComPtr<ID3D12Resource> m_pSwapChainRT[2]; // m_swapChainBufferCount == 2
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 
-	// 当前帧所使用的 backBuffer 索引。逐帧 0/1 交替。
+	// 当前帧所使用的 swapchain backBuffer 索引。
 	int m_backBufferIndex = 0;
 
 	int m_nRTVDescriptorSize;
