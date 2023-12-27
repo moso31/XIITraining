@@ -374,6 +374,8 @@ void D3D::Draw()
 
 void D3D::FlushCommandQueue()
 {
+	// TODO: 每帧强制等待fence是一种初学者设计，看一下龙书7.1是怎么搞的，优化一下
+
 	m_currFenceIdx++;
 	// 通过 Signal，告知GPU：在 Queue 执行完毕后，将值设置到 m_currFenceIdx
 	g_pCommandQueue->Signal(m_pFence.Get(), m_currFenceIdx);
