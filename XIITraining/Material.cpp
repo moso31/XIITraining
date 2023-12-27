@@ -79,7 +79,7 @@ void Material::CreateRootSignature()
 
 	// material textures, 对应 register t0...tn，但这个例子中实际只用了 t0
 	CD3DX12_DESCRIPTOR_RANGE range[1];
-	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // n=1个SRV，从slot 0开始
+	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, (UINT)m_viewsGroup.size(), 0); // m_viewsGroup 个SRV，从slot 0开始
 	rootParam[2].InitAsDescriptorTable(_countof(range), range);
 
 	// TODO: material cbuffer params, register b2...
