@@ -33,6 +33,8 @@ public:
 	// 移除 pageIdx 页面的，从 start 开始长度为 size 的内存块
 	void Remove(UINT pageIdx, UINT start, UINT size);
 
+	bool CreateCPUDescriptorHeapPage(DescriptorType type, DescriptorPage& oHeapPage);
+
 	// 将一组描述符拷贝到 m_renderHeap 中，并返回其在ring buffer中的偏移量
 	UINT AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
 

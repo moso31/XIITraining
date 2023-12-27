@@ -2,7 +2,9 @@
 
 DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) : 
 	m_pDevice(pDevice),
-	m_descriptorByteSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV))
+	m_descriptorByteSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)),
+	m_eachPageDataNum(DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT),
+	m_pageNumLimit(100)
 {
 	// 创建一个 shader-visible 的描述符堆，用于渲染前每帧提交。
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -12,26 +14,6 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) :
 	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_renderHeap));
 }
-
-//D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::Alloc(DescriptorType type, UINT allocSize)
-//{
-//	UINT heapIdx, descriptorIdx;
-//
-//	// 检查当前所有对应类型的堆中是否还有可用空间，有的话记录是 哪个堆（heapIdx）的 哪个描述符段（descriptorIdx）
-//	if (!CheckAllocable(type, allocSize, heapIdx, descriptorIdx))
-//	{
-//		// 没有可用空间，创建一个新的堆
-//		heapIdx = (UINT)m_heaps.size();
-//		descriptorIdx = 0;
-//		CreateHeap(type, allocSize);
-//	}
-//
-//	// 返回 alloc 分配的第一个描述符的 CPU 句柄，配合 allocSize 即可让外层方法使用
-//	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_heaps[heapIdx].data->GetCPUDescriptorHandleForHeapStart();
-//	handle.ptr += descriptorIdx * m_descriptorByteSize;
-//
-//	return handle;
-//}
 
 // 分配一个大小为 size 的内存块
 // size: 要分配的内存块的大小
@@ -51,13 +33,13 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 			if (space.ed - space.st + 1 >= size && space.st + size <= m_eachPageDataNum)
 			{
 				// 如果找到合适的空闲内存
+				oPageIdx = i;
+				oFirstIdx = space.st;
+
 				if (space.st + size <= space.ed)
 					page.freeIntervals.insert({ space.st + size, space.ed });
 
 				page.freeIntervals.erase(space);
-
-				oPageIdx = i;
-				oFirstIdx = space.st;
 
 				oHandle = page.data->GetCPUDescriptorHandleForHeapStart();
 				oHandle.ptr += oFirstIdx * m_descriptorByteSize;
@@ -71,6 +53,10 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 
 	// 如果没有找到合适的空闲内存，需要新分配一页
 	auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
+	newPage.freeIntervals.clear();
+	newPage.freeIntervals.insert({ size, m_eachPageDataNum - 1 });
+	newPage.type = type;
+	CreateCPUDescriptorHeapPage(type, newPage);
 	oPageIdx = (UINT)m_pages.size() - 1;
 	oFirstIdx = 0;
 	oHandle = newPage.data->GetCPUDescriptorHandleForHeapStart();
@@ -132,6 +118,20 @@ void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
 
 	freeIntervals.insert(adjust);
 	for (auto& space : removing) freeIntervals.erase(space);
+}
+
+bool DescriptorAllocator::CreateCPUDescriptorHeapPage(DescriptorType type, DescriptorPage& oHeapPage)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // cpu heap, 默认 FLAG_NONE = non-shader-visible.
+	desc.NodeMask = 0;
+	desc.NumDescriptors = m_eachPageDataNum;
+	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 此 allocator 只支持 CBVSRVUAV 这一种类型.
+
+	HRESULT hr = m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&oHeapPage.data));
+	oHeapPage.type = type;
+
+	return SUCCEEDED(hr);
 }
 
 UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)

@@ -2,10 +2,6 @@
 #include "header.h"
 #include "DescriptorAllocator.h"
 
-// CBResource 视作有 CBUFFER_RESOURCE_ELEMENT_SIZE 个 子资源 的资源池。
-// 总大小为 CBUFFER_RESOURCE_ELEMENT_SIZE * alignedByteSize 个字节.
-#define CBUFFER_RESOURCE_ELEMENT_SIZE 131072
-
 class CBufferAllocator
 {
 	struct CBufferPage
@@ -18,12 +14,12 @@ class CBufferAllocator
 
 public:
 	CBufferAllocator(ID3D12Device* pDevice, DescriptorAllocator* pDescriptorAllocator, UINT blockByteSize = 256) : 
-		m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize) {}
+		m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize), m_eachPageDataNum(1000000), m_pageNumLimit(100) {}
 	~CBufferAllocator() {}
 
 	// 分配一段CBV
 	template<typename T>
-	bool AllocCBV(T& data, D3D12_GPU_VIRTUAL_ADDRESS& oGPUVirtualAddr, UINT oPageIdx, UINT oByteOffsetInCBResourcePage)
+	bool AllocCBV(T& data, D3D12_GPU_VIRTUAL_ADDRESS& oGPUVirtualAddr, UINT& oPageIdx, UINT& oByteOffsetInCBResourcePage)
 	{
 		size_t blockByteMask = m_blockByteSize - 1;
 		UINT dataByteSize = (UINT)((sizeof(T) + blockByteMask) & ~blockByteMask);
@@ -71,13 +67,13 @@ public:
 				if (space.ed - space.st + 1 >= size && space.st + size <= m_eachPageDataNum)
 				{
 					// 如果找到合适的空闲内存
+					oPageIdx = i;
+					oFirstIdx = space.st;
+
 					if (space.st + size <= space.ed)
 						page.freeIntervals.insert({ space.st + size, space.ed });
 
 					page.freeIntervals.erase(space);
-
-					oPageIdx = i;
-					oFirstIdx = space.st;
 					return true;
 				}
 			}
@@ -88,6 +84,8 @@ public:
 
 		// 如果没有找到合适的空闲内存，需要新分配一页
 		auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
+		newPage.freeIntervals.clear();
+		newPage.freeIntervals.insert({ size, m_eachPageDataNum - 1 });
 		CreateResourcePage(newPage);
 		oPageIdx = (UINT)m_pages.size() - 1;
 		oFirstIdx = 0;
