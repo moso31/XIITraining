@@ -7,7 +7,9 @@ void App::Init()
 
 void App::Run()
 {
-	g_dx->Draw();
+	g_dx->Prepare();
+	g_dx->Update();
+	g_dx->Render();
 }
 
 void App::Release()

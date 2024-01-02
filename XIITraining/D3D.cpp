@@ -315,11 +315,8 @@ void D3D::Prepare()
 	}
 }
 
-void D3D::Draw()
+void D3D::Render()
 {
-	Prepare();
-	Update();
-
 	HRESULT hr;
 	hr = g_pCommandAllocator->Reset();
 

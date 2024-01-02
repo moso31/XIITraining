@@ -16,7 +16,9 @@ public:
 	// Prepare 的职责：
 	// 按材质遍历，对每个材质，按材质shader代码中所记录的描述符顺序，通过descriptorAllocator，在shader-visible堆中追加同样数量的描述符集，并记录在shader-visible堆中生成的第一个描述符的偏移量
 	void Prepare();
-	void Draw();
+
+	void Update();
+	void Render();
 
 	void FlushCommandQueue();
 
@@ -34,8 +36,6 @@ private:
 	void CreateDescriptorHeapForSwapChain();
 
 	void AllocCBufferPerFrame();
-
-	void Update();
 
 private:
 	ComPtr<IDXGIFactory7> m_pDXGIFactory;
