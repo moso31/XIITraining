@@ -1,6 +1,6 @@
-#include "CBufferAllocator.h"
+#include "CommittedAllocator.h"
 
-bool CBufferAllocator::CreateResourcePage(CBufferPage& newPage)
+void CommittedAllocator::CreateNewPage(ResourceAllocator::Page& newPage)
 {
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 
@@ -11,11 +11,9 @@ bool CBufferAllocator::CreateResourcePage(CBufferPage& newPage)
 		&cbDesc, // 资源描述
 		D3D12_RESOURCE_STATE_GENERIC_READ, // 初始的资源状态为READ（允许CPU写入数据）
 		nullptr,
-		IID_PPV_ARGS(&newPage.pData)
+		IID_PPV_ARGS(&newPage.data)
 	);
 
 	std::wstring debugName = L"CBuffer Resources Pool_" + std::to_wstring(m_pages.size() - 1);
-	newPage.pData->SetName(debugName.c_str());
-
-	return SUCCEEDED(hr);
+	newPage.data->SetName(debugName.c_str());
 }

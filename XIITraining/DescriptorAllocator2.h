@@ -12,19 +12,18 @@ enum DescriptorType
 	DescriptorType_UAV,
 };
 
-class DescriptorAllocator
+struct DescriptorPage
 {
-	struct DescriptorPage
-	{
-		DescriptorPage(UINT dataSize) { freeIntervals.insert({ 0, dataSize - 1 }); }
-		std::set<AllocatorRangeInterval> freeIntervals;
+	ID3D12DescriptorHeap* data = nullptr;
+	DescriptorType type;
+};
 
-		ID3D12DescriptorHeap* data = nullptr;
-		DescriptorType type;
-	};
+#define TypedDescriptorAllocator XAllocator<DescriptorPage>
 
+class DescriptorAllocator2 : public TypedDescriptorAllocator
+{
 public:
-	DescriptorAllocator(ID3D12Device* pDevice);
+	DescriptorAllocator2(ID3D12Device* pDevice);
 
 	// 在堆里找一段大小为 allocSize 的空间，并分配描述符
 	bool Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle);
@@ -32,7 +31,7 @@ public:
 	// 移除 pageIdx 页面的，从 start 开始长度为 size 的内存块
 	void Remove(UINT pageIdx, UINT start, UINT size);
 
-	bool CreateCPUDescriptorHeapPage(DescriptorType type, DescriptorPage& oHeapPage);
+	void CreateNewPage(TypedDescriptorAllocator::Page& newPage) override;
 
 	// 将一组描述符拷贝到 m_renderHeap 中，并返回其在ring buffer中的偏移量
 	UINT AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
@@ -44,13 +43,6 @@ public:
 private:
 	const UINT m_descriptorByteSize;
 	ID3D12Device* m_pDevice;
-
-	UINT m_pageNumLimit; // 这个allocator中最多能放多少个page
-	UINT m_eachPageDataNum; // 每个page中最多可放多少个data
-
-	// CPU描述符堆页，允许有多个描述符堆页面。
-	// 每个页只允许存储单一种类（CBV/SRV/UAV）的描述符。
-	std::vector<DescriptorPage> m_pages;
 
 	// GPU描述符堆。在概念上设计成一个 ring buffer。
 	ID3D12DescriptorHeap* m_renderHeap;

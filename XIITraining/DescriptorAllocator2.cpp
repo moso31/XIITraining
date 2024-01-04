@@ -1,10 +1,9 @@
-#include "DescriptorAllocator.h"
+#include "DescriptorAllocator2.h"
 
-DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) : 
+DescriptorAllocator2::DescriptorAllocator2(ID3D12Device* pDevice) : 
 	m_pDevice(pDevice),
 	m_descriptorByteSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)),
-	m_eachPageDataNum(DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT),
-	m_pageNumLimit(100)
+	TypedDescriptorAllocator(DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT, 100)
 {
 	// 创建一个 shader-visible 的描述符堆，用于渲染前每帧提交。
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -19,7 +18,7 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) :
 // size: 要分配的内存块的大小
 // oPageIdx: 分配到的页的下标
 // oFirstIdx: 分配到的页中的第一个内存块的下标
-bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle)
+bool DescriptorAllocator2::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle)
 {
 	if (size > m_eachPageDataNum) return false;
 
@@ -29,7 +28,7 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 	for (UINT i = 0; i < (UINT)m_pages.size(); i++)
 	{
 		auto& page = m_pages[i];
-		if (page.type != type) continue;
+		if (page.data.type != type) continue;
 
 		for (auto& space : page.freeIntervals)
 		{
@@ -44,7 +43,7 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 
 				page.freeIntervals.erase(space);
 
-				oHandle = page.data->GetCPUDescriptorHandleForHeapStart();
+				oHandle = page.data.data->GetCPUDescriptorHandleForHeapStart();
 				oHandle.ptr += oFirstIdx * m_descriptorByteSize;
 				return true;
 			}
@@ -55,15 +54,15 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 	auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
 	newPage.freeIntervals.clear();
 	newPage.freeIntervals.insert({ size, m_eachPageDataNum - 1 });
-	newPage.type = type;
-	CreateCPUDescriptorHeapPage(type, newPage);
+	newPage.data.type = type;
+	CreateNewPage(newPage);
 	oPageIdx = (UINT)m_pages.size() - 1;
 	oFirstIdx = 0;
-	oHandle = newPage.data->GetCPUDescriptorHandleForHeapStart();
+	oHandle = newPage.data.data->GetCPUDescriptorHandleForHeapStart();
 	return true;
 }
 
-void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
+void DescriptorAllocator2::Remove(UINT pageIdx, UINT start, UINT size)
 {
 	auto& freeIntervals = m_pages[pageIdx].freeIntervals;
 
@@ -120,7 +119,7 @@ void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
 	for (auto& space : removing) freeIntervals.erase(space);
 }
 
-bool DescriptorAllocator::CreateCPUDescriptorHeapPage(DescriptorType type, DescriptorPage& oHeapPage)
+void DescriptorAllocator2::CreateNewPage(TypedDescriptorAllocator::Page& newPage)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // cpu heap, 默认 FLAG_NONE = non-shader-visible.
@@ -128,13 +127,10 @@ bool DescriptorAllocator::CreateCPUDescriptorHeapPage(DescriptorType type, Descr
 	desc.NumDescriptors = m_eachPageDataNum;
 	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // 此 allocator 只支持 CBVSRVUAV 这一种类型.
 
-	HRESULT hr = m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&oHeapPage.data));
-	oHeapPage.type = type;
-
-	return SUCCEEDED(hr);
+	HRESULT hr = m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&newPage.data.data));
 }
 
-UINT DescriptorAllocator::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
+UINT DescriptorAllocator2::AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize)
 {
 	UINT firstOffsetIndex = m_currentOffset;
 

@@ -92,7 +92,7 @@ public:
 		return true;
 	}
 
-	void CreateResourcePage(CBufferPage& newPage);
+	bool CreateResourcePage(CBufferPage& newPage);
 	 
 	template<typename T>
 	void UpdateCBData(T& data, UINT pageIdx, UINT cbDataByteOffset)

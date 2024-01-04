@@ -2,8 +2,8 @@
 #include "Mesh.h"
 #include "Texture.h"
 #include "Material.h"
-#include "DescriptorAllocator.h"
-#include "CBufferAllocator.h"
+#include "DescriptorAllocator2.h"
+#include "CommittedAllocator.h"
 
 void D3D::Init()
 {
@@ -23,10 +23,10 @@ void D3D::Init()
 	CreateSwapChain();
 
 	// 创建描述符分配器
-	g_pDescriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
+	g_pDescriptorAllocator = new DescriptorAllocator2(g_pDevice.Get());
 	
 	// 创建 CBuffer 分配器
-	g_pCBufferAllocator = new CBufferAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
+	g_pCommitedAllocator = new CommittedAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
 
 	// 分配 CBPerFrame（现在里面只有相机的VP矩阵）
 	AllocCBufferPerFrame();
@@ -276,7 +276,7 @@ void D3D::AllocCBufferPerFrame()
 	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
 	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	g_pCBufferAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	g_pCommitedAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -401,7 +401,7 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	g_pCommitedAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{
