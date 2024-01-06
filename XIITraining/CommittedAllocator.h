@@ -1,13 +1,13 @@
 #pragma once
 #include "header.h"
-#include "DescriptorAllocator2.h"
+#include "DescriptorAllocator.h"
 
 #define ResourceAllocator XAllocator<ID3D12Resource*>
 
 class CommittedAllocator : public ResourceAllocator
 {
 public:
-	CommittedAllocator(ID3D12Device* pDevice, DescriptorAllocator2* pDescriptorAllocator, UINT blockByteSize = 256) : 
+	CommittedAllocator(ID3D12Device* pDevice, DescriptorAllocator* pDescriptorAllocator, UINT blockByteSize = 256) : 
 		ResourceAllocator(1000000, 100), m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize) {}
 	~CommittedAllocator() {}
 
@@ -60,7 +60,7 @@ public:
 
 private:
 	ID3D12Device* m_pDevice;
-	DescriptorAllocator2* m_pDescriptorAllocator;
+	DescriptorAllocator* m_pDescriptorAllocator;
 
 	UINT m_blockByteSize; // 每个page里的每个block所占的字节大小（该值必须是256的整数倍）
 };

@@ -2,7 +2,7 @@
 #include "Mesh.h"
 #include "Texture.h"
 #include "Material.h"
-#include "DescriptorAllocator2.h"
+#include "DescriptorAllocator.h"
 #include "CommittedAllocator.h"
 
 void D3D::Init()
@@ -23,7 +23,7 @@ void D3D::Init()
 	CreateSwapChain();
 
 	// 创建描述符分配器
-	g_pDescriptorAllocator = new DescriptorAllocator2(g_pDevice.Get());
+	g_pDescriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
 	
 	// 创建 CBuffer 分配器
 	g_pCommitedAllocator = new CommittedAllocator(g_pDevice.Get(), g_pDescriptorAllocator);

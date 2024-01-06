@@ -9,10 +9,8 @@
     <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Material.cpp" />
-    <ClCompile Include="CBufferAllocator.cpp" />
     <ClCompile Include="TextureAllocator.cpp" />
     <ClCompile Include="CommittedAllocator.cpp" />
-    <ClCompile Include="DescriptorAllocator2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -23,11 +21,9 @@
     <ClInclude Include="DescriptorAllocator.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Material.h" />
-    <ClInclude Include="CBufferAllocator.h" />
     <ClInclude Include="XAllocator.h" />
     <ClInclude Include="TextureAllocator.h" />
     <ClInclude Include="CommittedAllocator.h" />
-    <ClInclude Include="DescriptorAllocator2.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Color.fx" />

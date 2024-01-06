@@ -134,11 +134,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="App.cpp" />
-    <ClCompile Include="CBufferAllocator.cpp" />
     <ClCompile Include="CommittedAllocator.cpp" />
     <ClCompile Include="D3D.cpp" />
     <ClCompile Include="DescriptorAllocator.cpp" />
-    <ClCompile Include="DescriptorAllocator2.cpp" />
     <ClCompile Include="header.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
@@ -148,11 +146,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
-    <ClInclude Include="CBufferAllocator.h" />
     <ClInclude Include="CommittedAllocator.h" />
     <ClInclude Include="D3D.h" />
     <ClInclude Include="DescriptorAllocator.h" />
-    <ClInclude Include="DescriptorAllocator2.h" />
     <ClInclude Include="header.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.h" />

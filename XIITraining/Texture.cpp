@@ -1,5 +1,5 @@
 #include "Texture.h"
-#include "DescriptorAllocator2.h"
+#include "DescriptorAllocator.h"
 
 void Texture::Load(const std::filesystem::path& path, const std::string& name)
 {

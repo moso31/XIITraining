@@ -21,7 +21,7 @@ using namespace DirectX;
 
 class DescriptorAllocator;
 class CBufferAllocator;
-class DescriptorAllocator2;
+class DescriptorAllocator;
 class CommittedAllocator;
 
 extern HWND g_hWnd;
@@ -41,7 +41,7 @@ extern ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
 
 // 喵喵符分配器
 //extern DescriptorAllocator* g_pDescriptorAllocator;
-extern DescriptorAllocator2* g_pDescriptorAllocator;
+extern DescriptorAllocator* g_pDescriptorAllocator;
 
 // CBuffer分配器
 //extern CBufferAllocator* g_pCBufferAllocator;
