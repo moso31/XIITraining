@@ -37,25 +37,14 @@ void Texture::Load(const std::filesystem::path& path, const std::string& name)
 		desc.SampleDesc.Count = 1;
 		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
 
-		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
-		g_pDevice->CreateCommittedResource(
-			&defaultHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&m_pTexture));
-
 		UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
-
-		auto texDesc = m_pTexture->GetDesc();
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
 		UINT* numRow = new UINT[layoutSize];
 		UINT64* numRowSizeInBytes = new UINT64[layoutSize];
 		size_t totalBytes;
-		g_pDevice->GetCopyableFootprints(&texDesc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
+		g_pDevice->GetCopyableFootprints(&desc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
 
 		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(totalBytes);
 		// Create the GPU upload buffer.
@@ -71,6 +60,16 @@ void Texture::Load(const std::filesystem::path& path, const std::string& name)
 		void* mappedData;
 		m_pTextureUpload->Map(0, nullptr, &mappedData);
 
+		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		g_pDevice->CreateCommittedResource(
+			&defaultHeap,
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&m_pTexture));
+
+		auto texDesc = m_pTexture->GetDesc();
 		for (UINT face = 0, index = 0; face < texDesc.DepthOrArraySize; face++)
 		{
 			for (UINT mip = 0; mip < texDesc.MipLevels; mip++, index++)

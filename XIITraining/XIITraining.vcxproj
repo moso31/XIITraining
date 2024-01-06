@@ -142,7 +142,7 @@
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Texture.cpp" />
-    <ClCompile Include="TextureAllocator.cpp" />
+    <ClCompile Include="PlacedAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -154,7 +154,7 @@
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Texture.h" />
-    <ClInclude Include="TextureAllocator.h" />
+    <ClInclude Include="PlacedAllocator.h" />
     <ClInclude Include="XAllocator.h" />
   </ItemGroup>
   <ItemGroup>

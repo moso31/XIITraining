@@ -9,7 +9,7 @@
     <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Material.cpp" />
-    <ClCompile Include="TextureAllocator.cpp" />
+    <ClCompile Include="PlacedAllocator.cpp" />
     <ClCompile Include="CommittedAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -22,7 +22,7 @@
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="XAllocator.h" />
-    <ClInclude Include="TextureAllocator.h" />
+    <ClInclude Include="PlacedAllocator.h" />
     <ClInclude Include="CommittedAllocator.h" />
   </ItemGroup>
   <ItemGroup>
