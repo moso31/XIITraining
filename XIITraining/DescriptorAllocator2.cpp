@@ -20,46 +20,22 @@ DescriptorAllocator2::DescriptorAllocator2(ID3D12Device* pDevice) :
 // oFirstIdx: 分配到的页中的第一个内存块的下标
 bool DescriptorAllocator2::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle)
 {
-	if (size > m_eachPageDataNum) return false;
+	// 这里的 page 是 alloc 基类是
+	auto predicate = [type](Page& page){
+		return page.data.type == type;
+	};
 
-	// 如果已经达到了最大页数，无法再分配
-	if (m_pages.size() >= m_pageNumLimit) return false;
+	auto onFind = [&oFirstIdx, &oHandle, this](Page& page) {
+		oHandle = page.data.data->GetCPUDescriptorHandleForHeapStart();
+		oHandle.ptr += oFirstIdx * m_descriptorByteSize;
+	};
 
-	for (UINT i = 0; i < (UINT)m_pages.size(); i++)
-	{
-		auto& page = m_pages[i];
-		if (page.data.type != type) continue;
+	auto onCreate = [type, &oHandle](Page& newPage) {
+		oHandle = newPage.data.data->GetCPUDescriptorHandleForHeapStart();
+		newPage.data.type = type;
+	};
 
-		for (auto& space : page.freeIntervals)
-		{
-			if (space.ed - space.st + 1 >= size && space.st + size <= m_eachPageDataNum)
-			{
-				// 如果找到合适的空闲内存
-				oPageIdx = i;
-				oFirstIdx = space.st;
-
-				if (space.st + size <= space.ed)
-					page.freeIntervals.insert({ space.st + size, space.ed });
-
-				page.freeIntervals.erase(space);
-
-				oHandle = page.data.data->GetCPUDescriptorHandleForHeapStart();
-				oHandle.ptr += oFirstIdx * m_descriptorByteSize;
-				return true;
-			}
-		}
-	}
-
-	// 如果没有找到合适的空闲内存，需要新分配一页
-	auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
-	newPage.freeIntervals.clear();
-	newPage.freeIntervals.insert({ size, m_eachPageDataNum - 1 });
-	newPage.data.type = type;
-	CreateNewPage(newPage);
-	oPageIdx = (UINT)m_pages.size() - 1;
-	oFirstIdx = 0;
-	oHandle = newPage.data.data->GetCPUDescriptorHandleForHeapStart();
-	return true;
+	return TypedDescriptorAllocator::Alloc(size, oPageIdx, oFirstIdx, predicate, onFind, onCreate);
 }
 
 void DescriptorAllocator2::Remove(UINT pageIdx, UINT start, UINT size)

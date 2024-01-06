@@ -35,7 +35,13 @@ public:
 	// size: 要分配的内存块的大小
 	// oPageIdx: 分配到的页的下标
 	// oFirstIdx: 分配到的页中的第一个内存块的下标
-	bool Alloc(UINT size, UINT& oPageIdx, UINT& oFirstIdx)
+	// predicate: 若使用此参数时，则仅在符合谓词条件的页面上分配内存
+	// onFind：找到页面时的回调函数
+	// onCreate：未找到页面，创建新页面时的回调函数
+	bool Alloc(UINT size, UINT& oPageIdx, UINT& oFirstIdx,
+		std::function<bool(Page& page)> predicate = [](Page& page) { return true; },
+		std::function<void(Page& findPage)> onFind = [](Page& findPage) {},
+		std::function<void(Page& newPage)> onCreate = [](Page& newPage) {})
 	{
 		// 如果超过页面大小限制，或者已经不能分配新页，则Alloc失败
 		if (size > m_eachPageDataNum || m_pages.size() >= m_pageNumLimit) return false;
@@ -43,6 +49,10 @@ public:
 		for (UINT i = 0; i < (UINT)m_pages.size(); i++)
 		{
 			auto& page = m_pages[i];
+
+			// 若不满足谓词，则跳过此页
+			if (!predicate(page)) continue;
+
 			for (auto& space : page.freeIntervals)
 			{
 				if (space.ed - space.st + 1 >= size && space.st + size <= m_eachPageDataNum)
@@ -55,6 +65,10 @@ public:
 						page.freeIntervals.insert({ space.st + size, space.ed });
 
 					page.freeIntervals.erase(space);
+
+					// todo: onfind
+					onFind(page);
+
 					return true;
 				}
 			}
@@ -67,6 +81,9 @@ public:
 		CreateNewPage(newPage);
 		oPageIdx = (UINT)m_pages.size() - 1;
 		oFirstIdx = 0;
+
+		onCreate(newPage);
+
 		return true;
 	}
 
