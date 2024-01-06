@@ -20,7 +20,6 @@ DescriptorAllocator2::DescriptorAllocator2(ID3D12Device* pDevice) :
 // oFirstIdx: 分配到的页中的第一个内存块的下标
 bool DescriptorAllocator2::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle)
 {
-	// 这里的 page 是 alloc 基类是
 	auto predicate = [type](Page& page){
 		return page.data.type == type;
 	};

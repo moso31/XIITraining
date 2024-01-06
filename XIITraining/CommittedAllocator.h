@@ -43,8 +43,6 @@ public:
 
 		return false;
 	}
-
-	void CreateNewPage(ResourceAllocator::Page& newPage) override;
 	 
 	template<typename T>
 	void UpdateCBData(T& data, UINT pageIdx, UINT cbDataByteOffset)
@@ -57,6 +55,8 @@ public:
 		UINT8* pDest = pSrc + cbDataByteOffset;
 		memcpy(pDest, &data, sizeof(T));
 	}
+
+	void CreateNewPage(ResourceAllocator::Page& newPage) override;
 
 private:
 	ID3D12Device* m_pDevice;
