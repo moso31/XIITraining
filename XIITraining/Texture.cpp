@@ -1,4 +1,5 @@
 #include "Texture.h"
+#include "PlacedAllocator.h"
 #include "DescriptorAllocator.h"
 
 void Texture::Load(const std::filesystem::path& path, const std::string& name)
@@ -22,30 +23,29 @@ void Texture::Load(const std::filesystem::path& path, const std::string& name)
 		return;
 	}
 
-	// Create the texture.
+	D3D12_RESOURCE_DESC desc = {};
+	desc.Width = static_cast<UINT>(metadata.width);
+	desc.Height = static_cast<UINT>(metadata.height);
+	desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
+	desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
+		? static_cast<UINT16>(metadata.depth)
+		: static_cast<UINT16>(metadata.arraySize);
+	desc.Format = metadata.format;
+	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	desc.SampleDesc.Count = 1;
+	desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
+
+	CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+	UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
+	UINT* numRow = new UINT[layoutSize];
+	UINT64* numRowSizeInBytes = new UINT64[layoutSize];
+	size_t totalBytes;
+	g_pDevice->GetCopyableFootprints(&desc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
+
+	if (g_pTextureAllocator->Alloc(desc, m_pTexture.GetAddressOf()))
 	{
-		// Describe and create a Texture2D.
-		D3D12_RESOURCE_DESC desc = {};
-		desc.Width = static_cast<UINT>(metadata.width);
-		desc.Height = static_cast<UINT>(metadata.height);
-		desc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
-		desc.DepthOrArraySize = (metadata.dimension == TEX_DIMENSION_TEXTURE3D)
-			? static_cast<UINT16>(metadata.depth)
-			: static_cast<UINT16>(metadata.arraySize);
-		desc.Format = metadata.format;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.SampleDesc.Count = 1;
-		desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
-
-		CD3DX12_HEAP_PROPERTIES uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-
-		UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
-		UINT* numRow = new UINT[layoutSize];
-		UINT64* numRowSizeInBytes = new UINT64[layoutSize];
-		size_t totalBytes;
-		g_pDevice->GetCopyableFootprints(&desc, 0, layoutSize, 0, layouts, numRow, numRowSizeInBytes, &totalBytes);
-
 		CD3DX12_RESOURCE_DESC uploadBuffer = CD3DX12_RESOURCE_DESC::Buffer(totalBytes);
 		// Create the GPU upload buffer.
 		g_pDevice->CreateCommittedResource(
@@ -59,15 +59,6 @@ void Texture::Load(const std::filesystem::path& path, const std::string& name)
 
 		void* mappedData;
 		m_pTextureUpload->Map(0, nullptr, &mappedData);
-
-		CD3DX12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		g_pDevice->CreateCommittedResource(
-			&defaultHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&m_pTexture));
 
 		auto texDesc = m_pTexture->GetDesc();
 		for (UINT face = 0, index = 0; face < texDesc.DepthOrArraySize; face++)
@@ -98,10 +89,11 @@ void Texture::Load(const std::filesystem::path& path, const std::string& name)
 
 		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_pTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		g_pCommandList->ResourceBarrier(1, &barrier);
+
+		std::wstring wName(name.begin(), name.end());
+		m_pTexture->SetName(wName.c_str());
 	}
 
-	std::wstring wName(name.begin(), name.end());
-	m_pTexture->SetName(wName.c_str());
 	pImage.reset();
 }
 

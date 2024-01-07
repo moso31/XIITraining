@@ -10,10 +10,9 @@ ComPtr<ID3D12CommandQueue> g_pCommandQueue;
 ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; 
 ComPtr<ID3D12GraphicsCommandList> g_pCommandList; 
 
-//DescriptorAllocator* g_pDescriptorAllocator;
-//CBufferAllocator* g_pCBufferAllocator;
 DescriptorAllocator* g_pDescriptorAllocator;
-CommittedAllocator* g_pCommitedAllocator;
+CommittedAllocator* g_pCBufferAllocator;
+PlacedAllocator* g_pTextureAllocator;
 
 CBufferPerFrame g_cbPerFrame;
 UINT g_cbDataByteOffset; 

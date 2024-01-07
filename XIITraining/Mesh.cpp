@@ -168,7 +168,7 @@ void Mesh::CreateIB()
 
 void Mesh::CreateCBuffer()
 {
-	g_pCommitedAllocator->AllocCBV(m_cbData, m_cbDataGPUVirtualAddr, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
+	g_pCBufferAllocator->AllocCBV(m_cbData, m_cbDataGPUVirtualAddr, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
 }
 
 void Mesh::SetScale(float x, float y, float z)
@@ -192,7 +192,7 @@ void Mesh::Update()
 
 	m_cbData.worldMatrix = mx;
 
-	g_pCommitedAllocator->UpdateCBData(m_cbData, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
+	g_pCBufferAllocator->UpdateCBData(m_cbData, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
 }
 
 void Mesh::Render()
