@@ -35,13 +35,13 @@ public:
 	// size: 要分配的内存块的大小
 	// oPageIdx: 分配到的页的下标
 	// oFirstIdx: 分配到的页中的第一个内存块的下标
-	// predicate: 若使用此参数时，则仅在符合谓词条件的页面上分配内存
-	// onFind：找到页面时的回调函数
-	// onCreate：未找到页面，创建新页面时的回调函数
+	// predicate: 判断谓词，只能在此谓词=true的页面中分配内存。目前用来进行类型筛选。
+	// onCreate：若本次Alloc创建了新的Page，调用的回调函数。目前用于初始化新创建的Page的类型。
+	// onFind：若本次Alloc找到可分配内存空间，调用的回调函数。以前有用，后来被我优化掉了，但接口可以留着。
 	bool Alloc(UINT size, UINT& oPageIdx, UINT& oFirstIdx,
 		std::function<bool(Page& page)> predicate = [](Page& page) { return true; },
-		std::function<void(Page& findPage)> onFind = [](Page& findPage) {},
-		std::function<void(Page& newPage)> onCreate = [](Page& newPage) {})
+		std::function<void(Page& newPage)> onCreate = [](Page& newPage) {},
+		std::function<void(Page& findPage)> onFind = [](Page& findPage) {})
 	{
 		// 如果超过页面大小限制，或者已经不能分配新页，则Alloc失败
 		if (size > m_eachPageDataNum || m_pages.size() >= m_pageNumLimit) return false;
@@ -66,7 +66,6 @@ public:
 
 					page.freeIntervals.erase(space);
 
-					// todo: onfind
 					onFind(page);
 
 					return true;

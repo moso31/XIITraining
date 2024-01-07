@@ -33,8 +33,8 @@ public:
 
 			// ·ÖÅäÃèÊö·û
 			D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
-			UINT nouse;
-			if (m_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse, nouse, cbvCpuHandle))
+			UINT nouse[2];
+			if (m_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
 				m_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
 
 			oGPUVirtualAddr = cbvDesc.BufferLocation;

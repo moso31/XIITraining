@@ -24,17 +24,19 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 		return page.data.type == type;
 	};
 
-	auto onFind = [&oFirstIdx, &oHandle, this](Page& page) {
-		oHandle = page.data.data->GetCPUDescriptorHandleForHeapStart();
-		oHandle.ptr += oFirstIdx * m_descriptorByteSize;
-	};
-
-	auto onCreate = [type, &oHandle](Page& newPage) {
-		oHandle = newPage.data.data->GetCPUDescriptorHandleForHeapStart();
+	auto onCreate = [type](Page& newPage) {
 		newPage.data.type = type;
 	};
 
-	return TypedDescriptorAllocator::Alloc(size, oPageIdx, oFirstIdx, predicate, onFind, onCreate);
+	if (TypedDescriptorAllocator::Alloc(size, oPageIdx, oFirstIdx, predicate, onCreate))
+	{
+		auto& pDescriptor = m_pages[oPageIdx].data;
+		oHandle = pDescriptor.data->GetCPUDescriptorHandleForHeapStart();
+		oHandle.ptr += oFirstIdx * m_descriptorByteSize;
+		return true;
+	}
+
+	return false;
 }
 
 void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
