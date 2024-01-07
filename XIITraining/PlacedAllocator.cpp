@@ -1,10 +1,7 @@
 #include "PlacedAllocator.h"
 
-void PlacedAllocator::Alloc(ID3D12Resource* pUploadResource)
+bool PlacedAllocator::Alloc(ID3D12Resource* pUploadResource, ID3D12Resource* pOutResource)
 {
-	// 按照 Texture 类的约定，每个纹理自己有 Upload（上传堆CPU内存数据）
-	// 这里 Alloc 的职责就是，将纹理拷贝到默认堆，即 ID3D12Heap 中。
-
 	const auto& desc = pUploadResource->GetDesc();
 	UINT layoutSize = desc.DepthOrArraySize * desc.MipLevels;
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = new D3D12_PLACED_SUBRESOURCE_FOOTPRINT[layoutSize];
@@ -23,9 +20,11 @@ void PlacedAllocator::Alloc(ID3D12Resource* pUploadResource)
 		auto& pHeap = m_pages[oPageIdx].data;
 		UINT heapByteOffset = m_blockByteSize * oFirstIdx;
 
-		ComPtr<ID3D12Resource> pTexture;
-		m_pDevice->CreatePlacedResource(pHeap, heapByteOffset, &desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pTexture));
+		HRESULT hr = m_pDevice->CreatePlacedResource(pHeap, heapByteOffset, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pOutResource));
+		return SUCCEEDED(hr);
 	}
+
+	return false;
 }
 
 void PlacedAllocator::CreateNewPage(PlacedAllocatorBase::Page& newPage)

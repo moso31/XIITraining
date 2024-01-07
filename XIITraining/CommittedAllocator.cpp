@@ -1,6 +1,6 @@
 #include "CommittedAllocator.h"
 
-void CommittedAllocator::CreateNewPage(ResourceAllocator::Page& newPage)
+void CommittedAllocator::CreateNewPage(CommittedAllocatorBase::Page& newPage)
 {
 	CD3DX12_HEAP_PROPERTIES uploadHeapProp(D3D12_HEAP_TYPE_UPLOAD);
 

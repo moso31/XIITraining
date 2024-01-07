@@ -3,7 +3,7 @@
 DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice) : 
 	m_pDevice(pDevice),
 	m_descriptorByteSize(pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)),
-	TypedDescriptorAllocator(DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT, 100)
+	DescriptorAllocatorBase(DESCRIPTOR_NUM_PER_HEAP_MAXLIMIT, 100)
 {
 	// 创建一个 shader-visible 的描述符堆，用于渲染前每帧提交。
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -28,7 +28,7 @@ bool DescriptorAllocator::Alloc(DescriptorType type, UINT size, UINT& oPageIdx, 
 		newPage.data.type = type;
 	};
 
-	if (TypedDescriptorAllocator::Alloc(size, oPageIdx, oFirstIdx, predicate, onCreate))
+	if (DescriptorAllocatorBase::Alloc(size, oPageIdx, oFirstIdx, predicate, onCreate))
 	{
 		auto& pDescriptor = m_pages[oPageIdx].data;
 		oHandle = pDescriptor.data->GetCPUDescriptorHandleForHeapStart();
@@ -96,7 +96,7 @@ void DescriptorAllocator::Remove(UINT pageIdx, UINT start, UINT size)
 	for (auto& space : removing) freeIntervals.erase(space);
 }
 
-void DescriptorAllocator::CreateNewPage(TypedDescriptorAllocator::Page& newPage)
+void DescriptorAllocator::CreateNewPage(DescriptorAllocatorBase::Page& newPage)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // cpu heap, 默认 FLAG_NONE = non-shader-visible.

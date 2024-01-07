@@ -2,13 +2,13 @@
 #include "header.h"
 #include "DescriptorAllocator.h"
 
-#define ResourceAllocator XAllocator<ID3D12Resource*>
+#define CommittedAllocatorBase XAllocator<ID3D12Resource*>
 
-class CommittedAllocator : public ResourceAllocator
+class CommittedAllocator : public CommittedAllocatorBase
 {
 public:
 	CommittedAllocator(ID3D12Device* pDevice, DescriptorAllocator* pDescriptorAllocator, UINT blockByteSize = 256) : 
-		ResourceAllocator(1000000, 100), m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize) {}
+		CommittedAllocatorBase(1000000, 100), m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize) {}
 	~CommittedAllocator() {}
 
 	// 分配一段CBV
@@ -20,10 +20,9 @@ public:
 		UINT blockSize = dataByteSize / m_blockByteSize; // 该段CBV需要使用多少个Block
 
 		UINT oFirstIdx;
-		if (ResourceAllocator::Alloc(blockSize, oPageIdx, oFirstIdx))
+		if (CommittedAllocatorBase::Alloc(blockSize, oPageIdx, oFirstIdx))
 		{
 			auto& pResource = m_pages[oPageIdx].data;
-
 			oByteOffsetInCBResourcePage = m_blockByteSize * oFirstIdx;
 
 			// 创建CBV
@@ -56,7 +55,7 @@ public:
 		memcpy(pDest, &data, sizeof(T));
 	}
 
-	void CreateNewPage(ResourceAllocator::Page& newPage) override;
+	void CreateNewPage(CommittedAllocatorBase::Page& newPage) override;
 
 private:
 	ID3D12Device* m_pDevice;

@@ -11,7 +11,7 @@ public:
 		PlacedAllocatorBase(1000000, 10), m_pDevice(pDevice), m_pDescriptorAllocator(pDescriptorAllocator), m_blockByteSize(blockByteSize) {}
 	~PlacedAllocator() {}
 
-	void Alloc(ID3D12Resource* pResource);
+	bool Alloc(ID3D12Resource* pUploadResource, ID3D12Resource* pOutResource);
 
 	void CreateNewPage(PlacedAllocatorBase::Page& newPage) override;
 
