@@ -10,8 +10,12 @@ bool CommittedAllocator::Alloc(UINT byteSize, ResourceType resourceType, D3D12_G
 		return page.data.type == resourceType;
 	};
 
+	auto onCreate = [resourceType](Page& page) {
+		page.data.type = resourceType;
+	};
+
 	UINT oFirstIdx;
-	if (CommittedAllocatorBase::Alloc(blockSize, oPageIdx, oFirstIdx, predicate))
+	if (CommittedAllocatorBase::Alloc(blockSize, oPageIdx, oFirstIdx, predicate, onCreate))
 	{
 		auto& pResource = m_pages[oPageIdx].data.pResource;
 		oPageByteOffset = m_blockByteSize * oFirstIdx;
@@ -22,7 +26,7 @@ bool CommittedAllocator::Alloc(UINT byteSize, ResourceType resourceType, D3D12_G
 	return false;
 }
 
-void CommittedAllocator::UpdateCBData(void* data, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
+void CommittedAllocator::UpdateData(void* data, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
 {
 	auto& pResource = m_pages[pageIdx].data.pResource;
 
@@ -38,6 +42,24 @@ void CommittedAllocator::UpdateCBData(void* data, UINT dataSize, UINT pageIdx, U
 	memcpy(pDest, data, dataSize);
 }
 
+void CommittedAllocator::UpdateData(ID3D12Resource* pUploadResource, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
+{
+	auto& pResource = m_pages[pageIdx].data.pResource;
+	g_pCommandList->CopyBufferRegion(pResource, pageByteOffset, pUploadResource, pageByteOffset, dataSize);
+}
+
+void CommittedAllocator::SetResourceState(UINT pageIdx, const D3D12_RESOURCE_STATES& state)
+{
+	auto& resourceState = m_pages[pageIdx].data.resourceState;
+
+	if (resourceState != state)
+	{
+		auto& pResource = m_pages[pageIdx].data.pResource;
+		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(pResource, resourceState, state);
+		g_pCommandList->ResourceBarrier(1, &barrier);
+	}
+}
+
 void CommittedAllocator::CreateNewPage(CommittedAllocatorBase::Page& newPage)
 {
 	D3D12_HEAP_PROPERTIES heapProperties;
@@ -49,6 +71,7 @@ void CommittedAllocator::CreateNewPage(CommittedAllocatorBase::Page& newPage)
 
 	// 初始资源状态，如果是上传堆，则设为可读；如果是默认堆，则直接设为复制目标。
 	auto initResourceState = newPage.data.type == ResourceType_Default ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_GENERIC_READ;
+	newPage.data.resourceState = initResourceState;
 
 	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(m_blockByteSize * m_eachPageDataNum);
 	HRESULT hr = g_pDevice->CreateCommittedResource(

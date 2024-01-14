@@ -10,7 +10,7 @@ class Material;
 class Mesh
 {
 public:
-	void InitBox();
+	void Init(const std::string& meshName);
 
 	void Update();
 	void Render();
@@ -21,20 +21,9 @@ public:
 	void SetMaterial(Material* pMaterial);
 
 private:
-	void CreateVB();
-	void CreateIB();
-
 	void CreateCBuffer();
 
 private:
-	std::vector<VertexPNTC> m_vertices;
-	std::vector<UINT> m_indices;
-
-	ComPtr<ID3D12Resource> m_pVB;
-	ComPtr<ID3D12Resource> m_pIB;
-	ComPtr<ID3D12Resource> m_pVBUpload;
-	ComPtr<ID3D12Resource> m_pIBUpload;
-
 	bool m_rotate;
 	Vector3 m_scale;
 
@@ -45,5 +34,7 @@ private:
 
 	// 本Demo中 一个网格只有一个材质
 	Material* m_pMaterial;
+
+	std::string m_meshGeneratorName;
 };
 

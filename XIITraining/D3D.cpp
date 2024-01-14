@@ -28,7 +28,7 @@ void D3D::Init()
 	g_pDescriptorAllocator = new DescriptorAllocator(g_pDevice.Get());
 	
 	// 创建 CBuffer 分配器
-	g_pCBufferAllocator = new CommittedAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
+	g_pCBufferAllocator = new CommittedAllocator(g_pDevice.Get());
 
 	// 纹理分配器
 	g_pTextureAllocator = new PlacedAllocator(g_pDevice.Get());
@@ -62,14 +62,16 @@ void D3D::Init()
 	m_pMaterials.push_back(pMaterialBox);
 	m_pMaterials.push_back(pMaterialCubeMap);
 
+	MeshGenerator::GetInstance()->CreateBox("Box", 1.0f);
+
 	// 建模型
 	m_pMesh = new Mesh();
-	m_pMesh->InitBox();
+	m_pMesh->Init("Box");
 	m_pMesh->SetScale(1.0f, 1.0f, 1.0f);
 	m_pMesh->SetRotate(true);
 
 	m_pMeshCube = new Mesh();
-	m_pMeshCube->InitBox();
+	m_pMeshCube->Init("Box");
 	m_pMeshCube->SetScale(100.0f, 100.0f, 100.0f);
 	//m_pMeshCube->SetScale(0.1f, 0.1f, 0.1f);
 	m_pMeshCube->SetRotate(true);
@@ -77,7 +79,7 @@ void D3D::Init()
 	// 给模型绑材质
 	m_pMesh->SetMaterial(pMaterialBox);
 	m_pMeshCube->SetMaterial(pMaterialCubeMap);
-	
+
 	// 初始化流程结束后，默认关闭命令列表
 	g_pCommandList->Close();
 
@@ -420,7 +422,7 @@ void D3D::Update()
 	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
 	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	g_pCBufferAllocator->UpdateCBData(&g_cbPerFrame, sizeof(g_cbPerFrame), g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	g_pCBufferAllocator->UpdateData(&g_cbPerFrame, sizeof(g_cbPerFrame), g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{

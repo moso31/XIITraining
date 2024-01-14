@@ -77,11 +77,10 @@ protected:
 		auto& newPage = m_pages.emplace_back(m_eachPageDataNum);
 		newPage.freeIntervals.clear();
 		newPage.freeIntervals.insert({ size, m_eachPageDataNum - 1 });
+		onCreate(newPage);
 		CreateNewPage(newPage);
 		oPageIdx = (UINT)m_pages.size() - 1;
 		oFirstIdx = 0;
-
-		onCreate(newPage);
 
 		return true;
 	}
@@ -146,18 +145,18 @@ protected:
 		for (auto& space : removing) freeIntervals.erase(space);
 	}
 
-	void Print()
-	{
-		//for (size_t i = 0; i < m_pages.size(); i++)
-		//{
-		//	auto& page = m_pages[i];
-		//	std::cout << "page " << i << ":" << std::endl;
-		//	for (auto& space : page.freeIntervals)
-		//	{
-		//		std::cout << space.st << "," << space.ed << std::endl;
-		//	}
-		//}
-	}
+	//void Print()
+	//{
+	//	for (size_t i = 0; i < m_pages.size(); i++)
+	//	{
+	//		auto& page = m_pages[i];
+	//		std::cout << "page " << i << ":" << std::endl;
+	//		for (auto& space : page.freeIntervals)
+	//		{
+	//			std::cout << space.st << "," << space.ed << std::endl;
+	//		}
+	//	}
+	//}
 
 	UINT GetPagesNum() { return (UINT)m_pages.size(); }
 	UINT GetPageNumLimit() { return m_pageNumLimit; }
