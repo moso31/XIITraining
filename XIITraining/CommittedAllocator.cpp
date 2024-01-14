@@ -1,5 +1,43 @@
 #include "CommittedAllocator.h"
 
+bool CommittedAllocator::Alloc(UINT byteSize, ResourceType resourceType, D3D12_GPU_VIRTUAL_ADDRESS& oGPUVirtualAddr, UINT& oPageIdx, UINT& oPageByteOffset)
+{
+	size_t blockByteMask = m_blockByteSize - 1;
+	UINT dataByteSize = (UINT)((byteSize + blockByteMask) & ~blockByteMask);
+	UINT blockSize = dataByteSize / m_blockByteSize; // 这次alloc需要使用多少个Block
+
+	auto predicate = [resourceType](Page& page) {
+		return page.data.type == resourceType;
+	};
+
+	UINT oFirstIdx;
+	if (CommittedAllocatorBase::Alloc(blockSize, oPageIdx, oFirstIdx, predicate))
+	{
+		auto& pResource = m_pages[oPageIdx].data.pResource;
+		oPageByteOffset = m_blockByteSize * oFirstIdx;
+		oGPUVirtualAddr = pResource->GetGPUVirtualAddress() + oPageByteOffset;
+		return true;
+	}
+
+	return false;
+}
+
+void CommittedAllocator::UpdateCBData(void* data, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
+{
+	auto& pResource = m_pages[pageIdx].data.pResource;
+
+	// 只 Map 要修改的那一段即可
+	D3D12_RANGE mapRange;
+	mapRange.Begin = pageByteOffset;
+	mapRange.End = pageByteOffset + dataSize;
+
+	UINT8* pSrc;
+	HRESULT hr = pResource->Map(0, &mapRange, reinterpret_cast<void**>(&pSrc));
+
+	UINT8* pDest = pSrc + pageByteOffset;
+	memcpy(pDest, data, dataSize);
+}
+
 void CommittedAllocator::CreateNewPage(CommittedAllocatorBase::Page& newPage)
 {
 	D3D12_HEAP_PROPERTIES heapProperties;

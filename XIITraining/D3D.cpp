@@ -420,7 +420,7 @@ void D3D::Update()
 	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
 	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
 
-	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset, sizeof(g_cbPerFrame));
+	g_pCBufferAllocator->UpdateCBData(&g_cbPerFrame, sizeof(g_cbPerFrame), g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{

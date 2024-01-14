@@ -203,7 +203,7 @@ void Mesh::Update()
 
 	m_cbData.worldMatrix = mx;
 
-	g_pCBufferAllocator->UpdateCBData(m_cbData, m_cbDataCBufferPageIndex, m_cbDataByteOffset, sizeof(m_cbData));
+	g_pCBufferAllocator->UpdateCBData(&m_cbData, sizeof(m_cbData), m_cbDataCBufferPageIndex, m_cbDataByteOffset);
 }
 
 void Mesh::Render()
