@@ -141,6 +141,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="MeshGenerator.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="PlacedAllocator.cpp" />
   </ItemGroup>
@@ -152,6 +153,8 @@
     <ClInclude Include="header.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="MeshGenerator.h" />
+    <ClInclude Include="Instance.h" />
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="PlacedAllocator.h" />

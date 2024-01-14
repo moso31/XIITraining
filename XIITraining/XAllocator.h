@@ -17,7 +17,7 @@ struct AllocatorRangeInterval
 template<typename T>
 class XAllocator
 {
-public:
+protected:
 	struct Page
 	{
 		Page(UINT dataSize)

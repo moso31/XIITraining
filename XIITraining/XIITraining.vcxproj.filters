@@ -11,6 +11,7 @@
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="PlacedAllocator.cpp" />
     <ClCompile Include="CommittedAllocator.cpp" />
+    <ClCompile Include="MeshGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -24,6 +25,8 @@
     <ClInclude Include="XAllocator.h" />
     <ClInclude Include="PlacedAllocator.h" />
     <ClInclude Include="CommittedAllocator.h" />
+    <ClInclude Include="MeshGenerator.h" />
+    <ClInclude Include="Instance.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Color.fx" />

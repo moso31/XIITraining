@@ -23,6 +23,8 @@ class DescriptorAllocator;
 class CommittedAllocator;
 class PlacedAllocator;
 
+class MeshGenerator;
+
 extern HWND g_hWnd;
 
 class D3D;

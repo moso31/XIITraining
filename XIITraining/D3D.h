@@ -74,5 +74,7 @@ private:
 
 	Texture* m_pTextureBox = nullptr;
 	Texture* m_pTextureCubeMap = nullptr;
+
+	MeshGenerator* m_MeshGenerator;
 };
 

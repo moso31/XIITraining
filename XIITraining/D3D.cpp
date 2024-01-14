@@ -5,6 +5,7 @@
 #include "DescriptorAllocator.h"
 #include "CommittedAllocator.h"
 #include "PlacedAllocator.h"
+#include "MeshGenerator.h"
 
 void D3D::Init()
 {
@@ -29,7 +30,11 @@ void D3D::Init()
 	// 创建 CBuffer 分配器
 	g_pCBufferAllocator = new CommittedAllocator(g_pDevice.Get(), g_pDescriptorAllocator);
 
+	// 纹理分配器
 	g_pTextureAllocator = new PlacedAllocator(g_pDevice.Get());
+
+	// Mesh 生成类，负责生成并管理各种 Mesh
+	MeshGenerator::GetInstance()->Init();
 
 	// 分配 CBPerFrame（现在里面只有相机的VP矩阵）
 	AllocCBufferPerFrame();
@@ -275,11 +280,18 @@ void D3D::CreateDescriptorHeapForSwapChain()
 
 void D3D::AllocCBufferPerFrame()
 {
-	// 暂时先使用固定的相机参数
-	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
+	g_pCBufferAllocator->Alloc(sizeof(g_cbPerFrame), ResourceType_Upload, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
 
-	g_pCBufferAllocator->AllocCBV(g_cbPerFrame, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	// 创建CBV
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	cbvDesc.BufferLocation = g_cbDataGPUVirtualAddr; // 常量缓冲区的GPU虚拟地址
+	cbvDesc.SizeInBytes = (UINT)((sizeof(g_cbPerFrame) + 255) & ~255);
+
+	// 分配描述符
+	D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
+	UINT nouse[2];
+	if (g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
+		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -404,7 +416,11 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	// 暂时先使用固定位置的相机
+	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
+
+	g_pCBufferAllocator->UpdateCBData(g_cbPerFrame, g_cbDataCBufferPageIndex, g_cbDataByteOffset, sizeof(g_cbPerFrame));
 
 	for (auto& pMat : m_pMaterials)
 	{
