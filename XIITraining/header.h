@@ -19,7 +19,7 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
-#define FRAME_BUFFER_NUM 3
+#define FRAME_BUFFER_NUM 8
 
 template <typename T>
 class MultiFrame
@@ -27,6 +27,8 @@ class MultiFrame
 public:
     T& operator[](size_t index) { return data[index]; }
     const T& operator[](size_t index) const { return data[index]; }
+
+	void Reset(const T& val) { for (int i = 0; i < FRAME_BUFFER_NUM; i++) data[i] = val; }
 
 protected:
     T data[FRAME_BUFFER_NUM];
@@ -61,7 +63,7 @@ extern ComPtr<ID3D12Device8> g_pDevice;
 
 // 命令队列相关，目前仅使用一个队列，一个分配器，一个列表
 extern ComPtr<ID3D12CommandQueue> g_pCommandQueue; // 命令队列
-extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
+extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator[FRAME_BUFFER_NUM]; // 命令分配器
 extern ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
 
 // 喵喵符分配器

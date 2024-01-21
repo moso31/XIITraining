@@ -86,6 +86,10 @@ void D3D::Init()
 	ID3D12CommandList* pCmdLists[] = { g_pCommandList.Get() };
 	g_pCommandQueue->ExecuteCommandLists(1, pCmdLists);
 
+	// 初始化栅栏值均为0。
+	m_currFenceIdx = 0;
+	m_lastFenceIdx.Reset(0);
+
 	FlushCommandQueue();
 }
 
@@ -141,12 +145,15 @@ void D3D::CreateCommandObjects()
 	// 创建命令队列
 	hr = g_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&g_pCommandQueue));
 
-	// 创建命令分配器
-	hr = g_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_pCommandAllocator));
+	for (int i = 0; i < FRAME_BUFFER_NUM; i++)
+	{
+		// 创建命令分配器
+		hr = g_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_pCommandAllocator[i]));
 
-	// 创建命令列表，并将其和 命令分配器 关联
-	// 同时设定初始渲染管线状态 = nullptr（默认状态）
-	hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
+		// 创建命令列表，并将其和 命令分配器 关联
+		// 同时设定初始渲染管线状态 = nullptr（默认状态）
+		hr = g_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_pCommandAllocator[i].Get(), nullptr, IID_PPV_ARGS(&g_pCommandList));
+	}
 }
 
 void D3D::CreateSwapChain()
@@ -283,7 +290,7 @@ void D3D::AllocCBufferPerFrame()
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
 {
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_pSwapChain->GetCurrentBackBufferIndex());
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), m_nRTVDescriptorSize, m_backBufferIndex);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
@@ -293,11 +300,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferDSV()
 
 ID3D12Resource* D3D::GetSwapChainBackBuffer() const
 {
-	return m_pSwapChainRT[m_pSwapChain->GetCurrentBackBufferIndex()].Get();
+	return m_pSwapChainRT[m_backBufferIndex].Get();
 }
 
 void D3D::Prepare()
 {
+	m_backBufferIndex = m_pSwapChain->GetCurrentBackBufferIndex();
+
 	for (auto& pMaterial : m_pMaterials)
 	{
 		// 获取这个材质使用的所有 non-shader-visible (cpu) 描述符
@@ -315,10 +324,12 @@ void D3D::Prepare()
 
 void D3D::Render()
 {
-	HRESULT hr;
-	hr = g_pCommandAllocator->Reset();
+	auto& pCmdAllocator = g_pCommandAllocator[m_backBufferIndex];
 
-	hr = g_pCommandList->Reset(g_pCommandAllocator.Get(), nullptr);
+	HRESULT hr;
+	hr = pCmdAllocator->Reset();
+
+	hr = g_pCommandList->Reset(pCmdAllocator.Get(), nullptr);
 
 	// 设置视口
 	CD3DX12_VIEWPORT vp(0.0f, 0.0f, (float)m_width, (float)m_height);
@@ -338,7 +349,7 @@ void D3D::Render()
 
 	auto currSwapChainRTV = GetSwapChainBackBufferRTV();
 	auto currSwapChainDSV = GetSwapChainBackBufferDSV();
-	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_pSwapChain->GetCurrentBackBufferIndex() ? DirectX::Colors::LightSteelBlue : DirectX::Colors::LightSteelBlue, 0, nullptr);
+	g_pCommandList->ClearRenderTargetView(currSwapChainRTV, m_backBufferIndex ? DirectX::Colors::LightSteelBlue : DirectX::Colors::LightSteelBlue, 0, nullptr);
 	g_pCommandList->ClearDepthStencilView(currSwapChainDSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	g_pCommandList->OMSetRenderTargets(1, &currSwapChainRTV, true, &currSwapChainDSV);
@@ -352,7 +363,7 @@ void D3D::Render()
 
 		for (auto& pMat : m_pMaterials)
 		{
-			pMat->Render(m_pSwapChain->GetCurrentBackBufferIndex());
+			pMat->Render(m_backBufferIndex);
 		}
 	}
 
@@ -376,19 +387,27 @@ void D3D::Render()
 
 void D3D::FlushCommandQueue()
 {
-	// TODO: 每帧强制等待fence是一种初学者设计，看一下龙书7.1是怎么搞的，优化一下
-
 	m_currFenceIdx++;
+
 	// 通过 Signal，告知GPU：在 Queue 执行完毕后，将值设置到 m_currFenceIdx
 	g_pCommandQueue->Signal(m_pFence.Get(), m_currFenceIdx);
 
-	if (m_pFence->GetCompletedValue() < m_currFenceIdx)
+	// 一旦 m_currFenceIdx = x，就代表 CPU 接下来将处理 x 帧。
+	// 一旦 m_pFence->GetCompletedValue() = x，就代表 GPU 接下来将处理 x 帧。
+	// 所以，若 CPU - GPU = t，说明最多可能有同时 t+1 帧的资源正在被处理。
+
+	// 换言之，一旦 CPU - GPU > N - 1，说明CPU-GPU之间，已经积累了 N 帧的数据差。
+	// 此时如果继续让CPU积累下去，就会超过n缓冲的n帧限制，造成未定义行为。此时必须通过事件进行等待。
+	if (m_currFenceIdx - m_pFence->GetCompletedValue() > FRAME_BUFFER_NUM - 1)
 	{
+		//printf("%lld, %lld\n", m_currFenceIdx, m_pFence->GetCompletedValue());
+
 		// 创建一个 Windows 事件 fenceEvent。
 		HANDLE fenceEvent = CreateEvent(nullptr, false, false, nullptr);
 
 		// 通过下面的方法告知 GPU 值达到 m_currFenceIdx 事件时，向 CPU 推送一个 fenceEvent。
-		m_pFence->SetEventOnCompletion(m_currFenceIdx, fenceEvent);
+		// “等待GPU执行命令，直到CPU和GPU之间差N-1帧，才继续让CPU执行”
+		m_pFence->SetEventOnCompletion(m_currFenceIdx - FRAME_BUFFER_NUM + 1, fenceEvent);
 
 		// 让 Windows 持续等待这个 fence。
 		// 换言之，CPU 这边将持续等待，直到 GPU 那边的值确实的变化到 m_currFenceIdx。
@@ -403,7 +422,7 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	auto& currCBPerFrameData = g_cbPerFrame[m_pSwapChain->GetCurrentBackBufferIndex()];
+	auto& currCBPerFrameData = g_cbPerFrame[m_backBufferIndex];
 
 	// 暂时先使用固定位置的相机
 	currCBPerFrameData.data.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
@@ -415,7 +434,7 @@ void D3D::Update()
 	{
 		for (auto& pMesh : pMat->GetSubMeshes())
 		{
-			pMesh->Update(m_pSwapChain->GetCurrentBackBufferIndex());
+			pMesh->Update(m_backBufferIndex);
 		}
 	}
 }
