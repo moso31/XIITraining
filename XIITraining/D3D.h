@@ -51,8 +51,7 @@ private:
 	int m_height = 0;
 
 	// 始终使用双缓冲。
-	int m_swapChainBufferCount = 2;
-	ComPtr<ID3D12Resource> m_pSwapChainRT[2]; // m_swapChainBufferCount == 2
+	ComPtr<ID3D12Resource> m_pSwapChainRT[FRAME_BUFFER_NUM]; 
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 
 	// 当前帧所使用的 swapchain backBuffer 索引。

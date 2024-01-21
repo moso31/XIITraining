@@ -169,7 +169,7 @@ void D3D::CreateSwapChain()
 	swapChainDesc.SampleDesc.Count = 1; // MSAA4x 禁用
 	swapChainDesc.SampleDesc.Quality = 0; 
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // 用于RT
-	swapChainDesc.BufferCount = m_swapChainBufferCount; // 双缓冲
+	swapChainDesc.BufferCount = FRAME_BUFFER_NUM; // n缓冲
 	swapChainDesc.OutputWindow = g_hWnd; // 窗口句柄
 	swapChainDesc.Windowed = true; // 窗口模式
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // 翻转模式
@@ -190,7 +190,7 @@ void D3D::CreateDescriptorHeapForSwapChain()
 	RTVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	RTVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	RTVHeapDesc.NodeMask = 0;
-	RTVHeapDesc.NumDescriptors = m_swapChainBufferCount; // RTV描述符堆 内置两张描述符，对应了 SwapChain 的双缓冲。
+	RTVHeapDesc.NumDescriptors = FRAME_BUFFER_NUM; // RTV描述符堆 内置n张描述符，对应了 SwapChain 的n缓冲。
 
 	D3D12_DESCRIPTOR_HEAP_DESC DSVHeapDesc;
 	DSVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
@@ -203,8 +203,8 @@ void D3D::CreateDescriptorHeapForSwapChain()
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart());
 
-	// 创建交换链的两个RT
-	for (int i = 0; i < m_swapChainBufferCount; i++)
+	// 创建交换链的n个RT
+	for (int i = 0; i < FRAME_BUFFER_NUM; i++)
 	{
 		// 获取其中一个RT
 		m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&m_pSwapChainRT[i]));
@@ -253,24 +253,6 @@ void D3D::CreateDescriptorHeapForSwapChain()
 
 
 	// 创建深度Buffer资源本体
-	// 当然，如上面所述，交换链的RT也不需要创建这个。
-	// 下面的参数中，没有提到的有两个：
-	// D3D12_HEAP_FLAG_NONE：先不用管，让它等于none就行。
-	// 
-	// D3D12_RESOURCE_STATE_COMMON：资源状态。COMMON表示这是资源转换规则中的初始状态。
-	// 资源状态：可以理解成 DX12 的新概念。（尽管本质上 DX11 也有资源转换，但都封装在驱动层，DX11 API调用者通常不需要考虑这些。）
-	//		以这里的 深度buffer 为例，最开始的状态是 D3D12_RESOURCE_STATE_COMMON，表示这个资源是可用的，但是还没有被任何流水线使用。
-	//		之后，当我们将它绑定到流水线的某个阶段时，就需要将它转换为对应的状态，比如 D3D12_RESOURCE_STATE_DEPTH_WRITE。
-	//		之后，当我们将它从流水线的某个阶段解绑时，就需要将它转换回 D3D12_RESOURCE_STATE_COMMON。
-	// 
-	// 一个更完善的资源状态流程：// 如果是一个 RT 资源，则：
-	//		将其设置为RT并绑定到流水线之前，应将其设置为 D3D12_RESOURCE_STATE_RENDER_TARGET；
-	//		在 Present 执行之前，应将其转换为 D3D12_RESOURCE_STATE_PRESENT。
-	//		如果这个 RT 指向的Buffer，需要在下一个 pass 用作SRV输入，则：
-	//			如果该 pass 是 PixelShader，应将其转换为 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE。
-	//			如果该 pass 是 ComputeShader，应将其转换为 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE。
-	// 
-	//	总而言之，在一个渲染帧的整个过程中，需要根据各种情况，在Buffer使用前，将其转换成不同的资源状态。
 	CD3DX12_CLEAR_VALUE clearValue(DXGI_FORMAT_D24_UNORM_S8_UINT, 1.0f, 0x00);
 	g_pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_pDepthStencilBuffer));
 	m_pDepthStencilBuffer->SetName(L"Depth/Stencil Buffer");
@@ -282,18 +264,21 @@ void D3D::CreateDescriptorHeapForSwapChain()
 
 void D3D::AllocCBufferPerFrame()
 {
-	g_pCBufferAllocator->Alloc(sizeof(g_cbPerFrame), ResourceType_Upload, g_cbDataGPUVirtualAddr, g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	for (int i = 0; i < FRAME_BUFFER_NUM; i++)
+	{
+		g_pCBufferAllocator->Alloc(g_cbPerFrame[i].DataByteSize(), ResourceType_Upload, g_cbPerFrame[i].GPUVirtualAddr, g_cbPerFrame[i].pageIndex, g_cbPerFrame[i].pageByteOffset);
 
-	// 创建CBV
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = g_cbDataGPUVirtualAddr; // 常量缓冲区的GPU虚拟地址
-	cbvDesc.SizeInBytes = (UINT)((sizeof(g_cbPerFrame) + 255) & ~255);
+		// 创建CBV
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = g_cbPerFrame[i].GPUVirtualAddr; // 常量缓冲区的GPU虚拟地址
+		cbvDesc.SizeInBytes = (UINT)((g_cbPerFrame[i].DataByteSize() + 255) & ~255);
 
-	// 分配描述符
-	D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
-	UINT nouse[2];
-	if (g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
-		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
+		// 分配描述符
+		D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
+		UINT nouse[2];
+		if (g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
+			g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
+	}
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE D3D::GetSwapChainBackBufferRTV()
@@ -367,7 +352,7 @@ void D3D::Render()
 
 		for (auto& pMat : m_pMaterials)
 		{
-			pMat->Render();
+			pMat->Render(m_pSwapChain->GetCurrentBackBufferIndex());
 		}
 	}
 
@@ -418,17 +403,19 @@ void D3D::FlushCommandQueue()
 
 void D3D::Update()
 {
-	// 暂时先使用固定位置的相机
-	g_cbPerFrame.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
-	g_cbPerFrame.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
+	auto& currCBPerFrameData = g_cbPerFrame[m_pSwapChain->GetCurrentBackBufferIndex()];
 
-	g_pCBufferAllocator->UpdateData(&g_cbPerFrame, sizeof(g_cbPerFrame), g_cbDataCBufferPageIndex, g_cbDataByteOffset);
+	// 暂时先使用固定位置的相机
+	currCBPerFrameData.data.m_view = Matrix::CreateLookAt(Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)).Transpose();
+	currCBPerFrameData.data.m_proj = Matrix::CreatePerspectiveFieldOfView(60.0f / 180.0f * 3.1415926f, (float)m_width / (float)m_height, 0.01f, 300.0f).Transpose();
+
+	g_pCBufferAllocator->UpdateData(&currCBPerFrameData.data, currCBPerFrameData.DataByteSize(), currCBPerFrameData.pageIndex, currCBPerFrameData.pageByteOffset);
 
 	for (auto& pMat : m_pMaterials)
 	{
 		for (auto& pMesh : pMat->GetSubMeshes())
 		{
-			pMesh->Update();
+			pMesh->Update(m_pSwapChain->GetCurrentBackBufferIndex());
 		}
 	}
 }

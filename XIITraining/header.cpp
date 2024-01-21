@@ -14,7 +14,4 @@ DescriptorAllocator* g_pDescriptorAllocator;
 CommittedAllocator* g_pCBufferAllocator;
 PlacedAllocator* g_pTextureAllocator;
 
-CBufferPerFrame g_cbPerFrame;
-UINT g_cbDataByteOffset; 
-UINT g_cbDataCBufferPageIndex;
-D3D12_GPU_VIRTUAL_ADDRESS g_cbDataGPUVirtualAddr; 
+MultiFrame<XAllocatorData<CBufferPerFrameData>> g_cbPerFrame;

@@ -35,20 +35,20 @@ void Material::Reprofile()
 	CreatePSO();
 }
 
-void Material::Render()
+void Material::Render(const UINT swapChainBufferIndex)
 {
 	g_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 	g_pCommandList->SetPipelineState(m_pPipelineState.Get());
 
 	// cbPerFrame
-	g_pCommandList->SetGraphicsRootConstantBufferView(0, g_cbDataGPUVirtualAddr);
+	g_pCommandList->SetGraphicsRootConstantBufferView(0, g_cbPerFrame[swapChainBufferIndex].GPUVirtualAddr);
 
 	// cbOfMaterial
 	g_pCommandList->SetGraphicsRootDescriptorTable(2, m_gpuHandle);
 
 	for (auto& pMesh : m_refMeshes)
 	{
-		pMesh->Render();
+		pMesh->Render(swapChainBufferIndex);
 	}
 }
 
