@@ -1,6 +1,6 @@
 #include "Mesh.h"
 #include "Material.h"
-#include "CommittedAllocator.h"
+#include "..\XAllocator\CommittedAllocator.h"
 #include "MeshGenerator.h"
 
 void Mesh::Init(const std::string& meshName)

@@ -95,7 +95,7 @@
     <GenerateManifest>true</GenerateManifest>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">
-    <OutDir>..\libs\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)libs\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>Bin\Desktop_2022\$(Platform)\$(Configuration)\</IntDir>
     <TargetName>DirectXTex</TargetName>
     <GenerateManifest>true</GenerateManifest>
@@ -107,7 +107,7 @@
     <GenerateManifest>true</GenerateManifest>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|X64'">
-    <OutDir>..\libs\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)libs\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>Bin\Desktop_2022\$(Platform)\$(Configuration)\</IntDir>
     <TargetName>DirectXTex</TargetName>
     <GenerateManifest>true</GenerateManifest>
@@ -119,7 +119,7 @@
     <GenerateManifest>true</GenerateManifest>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|X64'">
-    <OutDir>..\libs\$(Configuration)\</OutDir>
+    <OutDir>$(SolutionDir)libs\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>Bin\Desktop_2022\$(Platform)\$(Configuration)\</IntDir>
     <TargetName>DirectXTex</TargetName>
     <GenerateManifest>true</GenerateManifest>
