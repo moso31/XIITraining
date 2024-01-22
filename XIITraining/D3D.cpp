@@ -398,7 +398,7 @@ void D3D::FlushCommandQueue()
 
 	// 换言之，一旦 CPU - GPU > N - 1，说明CPU-GPU之间，已经积累了 N 帧的数据差。
 	// 此时如果继续让CPU积累下去，就会超过n缓冲的n帧限制，造成未定义行为。此时必须通过事件进行等待。
-	if (m_currFenceIdx - m_pFence->GetCompletedValue() > FRAME_BUFFER_NUM - 8)
+	if (m_currFenceIdx - m_pFence->GetCompletedValue() > FRAME_BUFFER_NUM - 1)
 	{
 		//printf("%lld, %lld\n", m_currFenceIdx, m_pFence->GetCompletedValue());
 
@@ -407,7 +407,7 @@ void D3D::FlushCommandQueue()
 
 		// 通过下面的方法告知 GPU 值达到 m_currFenceIdx 事件时，向 CPU 推送一个 fenceEvent。
 		// “等待GPU执行命令，直到CPU和GPU之间差N-1帧，才继续让CPU执行”
-		m_pFence->SetEventOnCompletion(m_currFenceIdx - FRAME_BUFFER_NUM + 8, fenceEvent);
+		m_pFence->SetEventOnCompletion(m_currFenceIdx - FRAME_BUFFER_NUM + 1, fenceEvent);
 
 		// 让 Windows 持续等待这个 fence。
 		// 换言之，CPU 这边将持续等待，直到 GPU 那边的值确实的变化到 m_currFenceIdx - FRAME_BUFFER_NUM + 1。

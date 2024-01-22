@@ -1,5 +1,27 @@
 #include "App.h"
 
+#include <chrono>
+
+class Timer
+{
+public:
+	Timer()
+	{
+		last = std::chrono::high_resolution_clock::now();
+	}
+
+	float Mark()
+	{
+		const auto old = last;
+		last = std::chrono::high_resolution_clock::now();
+		const std::chrono::duration<float> frameTime = last - old;
+		return frameTime.count();
+	}
+
+private:
+	std::chrono::steady_clock::time_point last;
+};
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -53,6 +75,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	App* app = new App(width, height);
 
 	app->Init();
+	Timer timer;
 
 	MSG msg = { 0 };
 	while (msg.message != WM_QUIT)
@@ -67,6 +90,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		else
 		{
 			app->Run();
+
+			static float accumTime = 0.0f;
+			static int frameCount = 0;
+
+			float frameTime = timer.Mark();
+			accumTime += frameTime;
+			frameCount++;
+
+			if (accumTime >= 1.0f)
+			{
+				float fps = frameCount / accumTime;
+				frameCount = 0;
+				accumTime = 0.0f;
+
+				wchar_t windowText[256];
+				swprintf(windowText, sizeof(windowText), L"DirectX12 - FPS: %f", fps);
+				SetWindowText(g_hWnd, windowText);
+			}
 		}
 	}
 
