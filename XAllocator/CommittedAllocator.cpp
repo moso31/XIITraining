@@ -42,21 +42,29 @@ void CommittedAllocator::UpdateData(void* data, UINT dataSize, UINT pageIdx, UIN
 	memcpy(pDest, data, dataSize);
 }
 
-void CommittedAllocator::UpdateData(ID3D12Resource* pUploadResource, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
+void CommittedAllocator::UpdateData(ID3D12GraphicsCommandList* pCmdList, ID3D12Resource* pUploadResource, UINT dataSize, UINT pageIdx, UINT pageByteOffset)
 {
 	auto& pResource = m_pages[pageIdx].data.pResource;
-	g_pCommandList->CopyBufferRegion(pResource, pageByteOffset, pUploadResource, pageByteOffset, dataSize);
+	pCmdList->CopyBufferRegion(pResource, pageByteOffset, pUploadResource, pageByteOffset, dataSize);
 }
 
-void CommittedAllocator::SetResourceState(UINT pageIdx, const D3D12_RESOURCE_STATES& state)
+void CommittedAllocator::SetResourceState(ID3D12GraphicsCommandList* pCmdList, UINT pageIdx, const D3D12_RESOURCE_STATES& state)
 {
 	auto& resourceState = m_pages[pageIdx].data.resourceState;
 
 	if (resourceState != state)
 	{
 		auto& pResource = m_pages[pageIdx].data.pResource;
-		auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(pResource, resourceState, state);
-		g_pCommandList->ResourceBarrier(1, &barrier);
+
+		D3D12_RESOURCE_BARRIER barrier; 
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource = pResource;
+		barrier.Transition.StateBefore = resourceState;
+		barrier.Transition.StateAfter = state;
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+		pCmdList->ResourceBarrier(1, &barrier);
 	}
 }
 
@@ -73,8 +81,20 @@ void CommittedAllocator::CreateNewPage(CommittedAllocatorBase::Page& newPage)
 	auto initResourceState = newPage.data.type == ResourceType_Default ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_GENERIC_READ;
 	newPage.data.resourceState = initResourceState;
 
-	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(m_blockByteSize * m_eachPageDataNum);
-	HRESULT hr = g_pDevice->CreateCommittedResource(
+	D3D12_RESOURCE_DESC cbDesc;
+	cbDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	cbDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+	cbDesc.Width = m_blockByteSize * m_eachPageDataNum; // 总大小，单位为字节
+	cbDesc.Height = 1; // 对于缓冲区，高度必须为1
+	cbDesc.DepthOrArraySize = 1; // 对于缓冲区，深度必须为1
+	cbDesc.MipLevels = 1; // 缓冲区的MIP等级数，应为1
+	cbDesc.Format = DXGI_FORMAT_UNKNOWN; // 缓冲区不使用DXGI格式，所以设置为UNKNOWN
+	cbDesc.SampleDesc.Count = 1; // 多重采样的数量，对于缓冲区，这应该是1
+	cbDesc.SampleDesc.Quality = 0; // 多重采样的质量，通常为0
+	cbDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; // 缓冲区的布局，通常为行主序
+	cbDesc.Flags = D3D12_RESOURCE_FLAG_NONE; // 资源的标志，根据需要进行设置
+
+	HRESULT hr = m_pDevice->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&cbDesc, // 资源描述

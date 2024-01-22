@@ -1,8 +1,8 @@
 #pragma once
 #include "header.h"
 #include "Instance.h"
-#include "CommittedAllocator.h"
-#include "DescriptorAllocator.h"
+#include "../XAllocator/CommittedAllocator.h"
+#include "../XAllocator/DescriptorAllocator.h"
 
 struct MeshData
 {

@@ -29,9 +29,13 @@ bool PlacedAllocator::Alloc(const D3D12_RESOURCE_DESC& resourceDesc, ID3D12Resou
 void PlacedAllocator::CreateNewPage(PlacedAllocatorBase::Page& newPage)
 {
 	D3D12_HEAP_DESC desc = {};
-	desc.Alignment = 0;
+	desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	desc.Flags = D3D12_HEAP_FLAG_NONE;
-	desc.Properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	desc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	desc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	desc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	desc.Properties.CreationNodeMask = 1; // Assuming single GPU node
+	desc.Properties.VisibleNodeMask = 1; // Assuming single GPU node
 	desc.SizeInBytes = m_blockByteSize * m_eachPageDataNum;
 
 	m_pDevice->CreateHeap(&desc, IID_PPV_ARGS(&newPage.data));

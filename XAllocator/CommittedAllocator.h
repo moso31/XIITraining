@@ -1,5 +1,4 @@
 #pragma once
-#include "header.h"
 #include "XAllocator.h"
 
 enum ResourceType
@@ -42,10 +41,10 @@ public:
 
 	// 更新资源池中的内存。
 	// NOTE：仅 ResourceType_Default 类型的 Page 可以使用此方法！
-	void UpdateData(ID3D12Resource* pUploadResource, UINT dataSize, UINT pageIdx, UINT pageByteOffset);
+	void UpdateData(ID3D12GraphicsCommandList* ID3D12GraphicsCommandList, ID3D12Resource* pUploadResource, UINT dataSize, UINT pageIdx, UINT pageByteOffset);
 
 	// 设置资源状态
-	void SetResourceState(UINT pageIdx, const D3D12_RESOURCE_STATES& state);
+	void SetResourceState(ID3D12GraphicsCommandList* ID3D12GraphicsCommandList, UINT pageIdx, const D3D12_RESOURCE_STATES& state);
 
 	void CreateNewPage(CommittedAllocatorBase::Page& newPage) override;
 

@@ -128,13 +128,13 @@ void MeshGenerator::CreateBox(const std::string& name, float size)
 		uploadIB->Unmap(0, nullptr);
 
 		// 2.3 从上传堆拷贝到默认堆
-		m_vbAllocator->SetResourceState(vbData.pageIndex, D3D12_RESOURCE_STATE_COPY_DEST);
-		m_vbAllocator->UpdateData(uploadVB.Get(), vbDataSize, vbData.pageIndex, vbData.pageByteOffset);
-		m_vbAllocator->SetResourceState(vbData.pageIndex, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+		m_vbAllocator->SetResourceState(g_pCommandList.Get(), vbData.pageIndex, D3D12_RESOURCE_STATE_COPY_DEST);
+		m_vbAllocator->UpdateData(g_pCommandList.Get(), uploadVB.Get(), vbDataSize, vbData.pageIndex, vbData.pageByteOffset);
+		m_vbAllocator->SetResourceState(g_pCommandList.Get(), vbData.pageIndex, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
-		m_ibAllocator->SetResourceState(ibData.pageIndex, D3D12_RESOURCE_STATE_COPY_DEST);
-		m_ibAllocator->UpdateData(uploadIB.Get(), ibDataSize, ibData.pageIndex, ibData.pageByteOffset);
-		m_ibAllocator->SetResourceState(ibData.pageIndex, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+		m_ibAllocator->SetResourceState(g_pCommandList.Get(), ibData.pageIndex, D3D12_RESOURCE_STATE_COPY_DEST);
+		m_ibAllocator->UpdateData(g_pCommandList.Get(), uploadIB.Get(), ibDataSize, ibData.pageIndex, ibData.pageByteOffset);
+		m_ibAllocator->SetResourceState(g_pCommandList.Get(), ibData.pageIndex, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 		// 3. 将Mesh数据存储到m_data中
 		MeshViews views;

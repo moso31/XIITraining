@@ -6,11 +6,8 @@
     <ClCompile Include="D3D.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="header.cpp" />
-    <ClCompile Include="DescriptorAllocator.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Material.cpp" />
-    <ClCompile Include="PlacedAllocator.cpp" />
-    <ClCompile Include="CommittedAllocator.cpp" />
     <ClCompile Include="MeshGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -19,12 +16,8 @@
     <ClInclude Include="ShaderStructures.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="header.h" />
-    <ClInclude Include="DescriptorAllocator.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Material.h" />
-    <ClInclude Include="XAllocator.h" />
-    <ClInclude Include="PlacedAllocator.h" />
-    <ClInclude Include="CommittedAllocator.h" />
     <ClInclude Include="MeshGenerator.h" />
     <ClInclude Include="Instance.h" />
   </ItemGroup>

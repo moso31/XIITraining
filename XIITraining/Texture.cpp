@@ -1,6 +1,6 @@
 #include "Texture.h"
-#include "PlacedAllocator.h"
-#include "DescriptorAllocator.h"
+#include "../XAllocator/PlacedAllocator.h"
+#include "../XAllocator/DescriptorAllocator.h"
 
 void Texture::Load(const std::filesystem::path& path, const std::string& name)
 {
