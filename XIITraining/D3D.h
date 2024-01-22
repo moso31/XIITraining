@@ -50,9 +50,8 @@ private:
 	int m_width = 0;
 	int m_height = 0;
 
-	// 始终使用双缓冲。
-	int m_swapChainBufferCount = 2;
-	ComPtr<ID3D12Resource> m_pSwapChainRT[2]; // m_swapChainBufferCount == 2
+	// 使用n缓冲。
+	MultiFrame<ComPtr<ID3D12Resource>> m_pSwapChainRT; 
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 
 	// 当前帧所使用的 swapchain backBuffer 索引。
@@ -63,7 +62,8 @@ private:
 	int m_nSamplerDescriptorSize;
 	int m_nCBSRUAVDescriptorSize;
 
-	UINT64 m_currFenceIdx = 0;
+	UINT64 m_currFenceIdx;
+	MultiFrame<UINT64> m_lastFenceIdx;
 
 	ComPtr<ID3D12Resource> m_pCBPerFrame;
 

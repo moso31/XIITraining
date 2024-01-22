@@ -11,18 +11,21 @@ void Mesh::Init(const std::string& meshName)
 
 void Mesh::CreateCBuffer()
 {
-	g_pCBufferAllocator->Alloc(sizeof(m_cbData), ResourceType_Upload, m_cbDataGPUVirtualAddr, m_cbDataCBufferPageIndex, m_cbDataByteOffset);
+	for (int i = 0; i < FRAME_BUFFER_NUM; i++)
+	{
+		g_pCBufferAllocator->Alloc(m_cbData[i].DataByteSize(), ResourceType_Upload, m_cbData[i].GPUVirtualAddr, m_cbData[i].pageIndex, m_cbData[i].pageByteOffset);
 
-	// 创建CBV
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = m_cbDataGPUVirtualAddr; // 常量缓冲区的GPU虚拟地址
-	cbvDesc.SizeInBytes = (UINT)((sizeof(m_cbData) + 255) & ~255);
+		// 创建CBV
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = m_cbData[i].GPUVirtualAddr; // 常量缓冲区的GPU虚拟地址
+		cbvDesc.SizeInBytes = (UINT)((m_cbData[i].DataByteSize() + 255) & ~255);
 
-	// 分配描述符
-	D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
-	UINT nouse[2];
-	if (g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
-		g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
+		// 分配描述符
+		D3D12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
+		UINT nouse[2];
+		if (g_pDescriptorAllocator->Alloc(DescriptorType_CBV, 1, nouse[0], nouse[1], cbvCpuHandle))
+			g_pDevice->CreateConstantBufferView(&cbvDesc, cbvCpuHandle);
+	}
 }
 
 void Mesh::SetScale(float x, float y, float z)
@@ -36,7 +39,7 @@ void Mesh::SetMaterial(Material* pMaterial)
 	m_pMaterial->AddRefMesh(this);
 }
 
-void Mesh::Update()
+void Mesh::Update(const UINT swapChainBufferIndex)
 {
 	static float r = 0.0f;
 	r += 0.0025f;
@@ -44,15 +47,16 @@ void Mesh::Update()
 	Matrix mx = Matrix::CreateScale(m_scale);
 	if (m_rotate) mx = mx * Matrix::CreateRotationX(-r) * Matrix::CreateRotationY(r);
 
-	m_cbData.worldMatrix = mx;
+	auto& currFrameData = m_cbData[swapChainBufferIndex];
+	currFrameData.data.worldMatrix = mx;
 
-	g_pCBufferAllocator->UpdateData(&m_cbData, sizeof(m_cbData), m_cbDataCBufferPageIndex, m_cbDataByteOffset);
+	g_pCBufferAllocator->UpdateData(&currFrameData.data, currFrameData.DataByteSize(), currFrameData.pageIndex, currFrameData.pageByteOffset);
 }
 
-void Mesh::Render()
+void Mesh::Render(const UINT swapChainBufferIndex)
 {
 	// cbPerObject
-	g_pCommandList->SetGraphicsRootConstantBufferView(1, m_cbDataGPUVirtualAddr);
+	g_pCommandList->SetGraphicsRootConstantBufferView(1, m_cbData[swapChainBufferIndex].GPUVirtualAddr);
 
 	const MeshViews& meshViews = MeshGenerator::GetInstance()->GetMeshViews(m_meshGeneratorName);
 	g_pCommandList->IASetVertexBuffers(0, 1, &meshViews.vbv);

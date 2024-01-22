@@ -19,6 +19,32 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
+#define FRAME_BUFFER_NUM 8
+
+template <typename T>
+class MultiFrame
+{
+public:
+    T& operator[](size_t index) { return data[index]; }
+    const T& operator[](size_t index) const { return data[index]; }
+
+	void Reset(const T& val) { for (int i = 0; i < FRAME_BUFFER_NUM; i++) data[i] = val; }
+
+protected:
+    T data[FRAME_BUFFER_NUM];
+};
+
+template <typename T>
+struct XAllocatorData
+{
+	virtual UINT DataByteSize() { return sizeof(T); }
+
+	T data;
+	UINT pageIndex; // 记录该数据在 XAllocator 的页面索引
+	UINT pageByteOffset; // 记录该数据在 XAllocator 的页面的字节偏移量
+	D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddr; // 记录该数据的 GPU 虚拟地址
+};
+
 class DescriptorAllocator;
 class CommittedAllocator;
 class PlacedAllocator;
@@ -37,7 +63,7 @@ extern ComPtr<ID3D12Device8> g_pDevice;
 
 // 命令队列相关，目前仅使用一个队列，一个分配器，一个列表
 extern ComPtr<ID3D12CommandQueue> g_pCommandQueue; // 命令队列
-extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator; // 命令分配器
+extern ComPtr<ID3D12CommandAllocator> g_pCommandAllocator[FRAME_BUFFER_NUM]; // 命令分配器
 extern ComPtr<ID3D12GraphicsCommandList> g_pCommandList; // 命令列表
 
 // 喵喵符分配器
@@ -50,7 +76,4 @@ extern CommittedAllocator* g_pCBufferAllocator;
 extern PlacedAllocator* g_pTextureAllocator;
 
 // 每帧更新的CB数据
-extern CBufferPerFrame g_cbPerFrame;
-extern UINT g_cbDataByteOffset; // 记录该数据在 CB 分配器中，分配池 内的 字节偏移量
-extern UINT g_cbDataCBufferPageIndex;
-extern D3D12_GPU_VIRTUAL_ADDRESS g_cbDataGPUVirtualAddr; // 记录该数据的 GPU 虚拟地址
+extern MultiFrame<XAllocatorData<CBufferPerFrameData>> g_cbPerFrame;
