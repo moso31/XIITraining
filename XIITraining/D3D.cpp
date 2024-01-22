@@ -410,11 +410,10 @@ void D3D::FlushCommandQueue()
 		m_pFence->SetEventOnCompletion(m_currFenceIdx - FRAME_BUFFER_NUM + 1, fenceEvent);
 
 		// 让 Windows 持续等待这个 fence。
-		// 换言之，CPU 这边将持续等待，直到 GPU 那边的值确实的变化到 m_currFenceIdx。
+		// 换言之，CPU 这边将持续等待，直到 GPU 那边的值确实的变化到 m_currFenceIdx - FRAME_BUFFER_NUM + 1。
 		WaitForSingleObject(fenceEvent, INFINITE);
 
-		// 当执行到这里，说明 GPU 的值已经确实的变化到 m_currFenceIdx 了。
-		// 这时就可以将这个事件关闭掉了。
+		// 当执行到这里，说明 GPU 的值已经确实的变化到 m_currFenceIdx - FRAME_BUFFER_NUM + 1，这时就可以将这个事件关闭掉了。
 		// 这样也就完成了一次 CPU 和 GPU 之间的通信同步。
 		CloseHandle(fenceEvent);
 	}
