@@ -45,7 +45,7 @@ void D3D::Init()
 	m_pTextureBox->AddSRV(TextureType_2D);
 
 	m_pTextureCubeMap = new Texture();
-	m_pTextureCubeMap->Load("D:\\NixAssets\\HDR\\ballroom_4k.dds", "My Cube");
+	m_pTextureCubeMap->Load("D:\\NixAssets\\HDR\\Arches_E_PineTree_3k.dds", "My Cube");
 	m_pTextureCubeMap->AddSRV(TextureType_Cube);
 
 	// 创建材质，指定纹理，手动编译。
@@ -68,7 +68,7 @@ void D3D::Init()
 	m_pMesh = new Mesh();
 	m_pMesh->Init("Box");
 	m_pMesh->SetScale(1.0f, 1.0f, 1.0f);
-	m_pMesh->SetRotate(true);
+	//m_pMesh->SetRotate(true);
 
 	m_pMeshCube = new Mesh();
 	m_pMeshCube->Init("Box");
@@ -315,8 +315,7 @@ void D3D::Prepare()
 
 		// 将这些 描述符 追加到 shader-visible (gpu) 的描述符堆 
 		UINT renderHeapOffset = g_pDescriptorAllocator->AppendToRenderHeap(pDescriptors, pDescriptorsSize);
-		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = g_pDescriptorAllocator->GetRenderHeap()->GetGPUDescriptorHandleForHeapStart();
-		gpuHandle.ptr += renderHeapOffset * g_pDescriptorAllocator->GetRenderHeapDescriptorByteSize();
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = g_pDescriptorAllocator->GetRenderHeapGPUHandle(renderHeapOffset);
 
 		pMaterial->SetGPUHandle(gpuHandle);
 	}

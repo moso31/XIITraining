@@ -24,6 +24,7 @@ class DescriptorAllocator : public DescriptorAllocatorBase
 {
 public:
 	DescriptorAllocator(ID3D12Device* pDevice);
+	DescriptorAllocator(ID3D12Device* pDevice, UINT pageNumLimit, UINT pageSizeLimit, UINT renderPageNumLimit);
 
 	// 在堆里找一段大小为 allocSize 的空间，并分配描述符
 	bool Alloc(DescriptorType type, UINT size, UINT& oPageIdx, UINT& oFirstIdx, D3D12_CPU_DESCRIPTOR_HANDLE& oHandle);
@@ -37,8 +38,7 @@ public:
 	UINT AppendToRenderHeap(const size_t* cpuHandles, const size_t cpuHandlesSize);
 
 	ID3D12DescriptorHeap* GetRenderHeap() const { return m_renderHeap; }
-
-	const UINT GetRenderHeapDescriptorByteSize() { return m_descriptorByteSize; }
+	D3D12_GPU_DESCRIPTOR_HANDLE GetRenderHeapGPUHandle(UINT gpuOffset);
 
 private:
 	const UINT m_descriptorByteSize;
@@ -48,5 +48,5 @@ private:
 	ID3D12DescriptorHeap* m_renderHeap;
 
 	// renderHeap 是一个 ring buffer，每帧都要更新 ring buffer 上的指针偏移位置
-	UINT m_currentOffset = 0; 
+	UINT m_renderHeapOffset = 0; 
 };
